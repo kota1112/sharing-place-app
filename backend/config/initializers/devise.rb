@@ -305,6 +305,27 @@ Devise.setup do |config|
   config.responder.error_status = :unprocessable_entity
   config.responder.redirect_status = :see_other
 
+  # JSON API 応答に寄せる（HTMLリダイレクト抑止）
+config.navigational_formats = []
+
+# --- JWT (devise-jwt) 設定 ---
+config.jwt do |jwt|
+  # 本番：ENV 優先 → credentials。dev/test だけ 'dev' を許容
+  secret = ENV['DEVISE_JWT_SECRET_KEY'] ||
+           Rails.application.credentials.dig(:devise_jwt_secret_key) ||
+           ((Rails.env.development? || Rails.env.test?) ? 'dev' : nil)
+  raise "Missing DEVISE_JWT_SECRET_KEY (set ENV or credentials)" if secret.nil?
+
+  jwt.secret = secret
+  jwt.dispatch_requests  = [['POST', %r{^/auth/sign_in$}]]
+  jwt.revocation_requests = [['DELETE', %r{^/auth/sign_out$}]]
+  jwt.expiration_time = 2.days.to_i
+end
+
+
+
+
+
   # ==> Configuration for :registerable
 
   # When set to false, does not sign a user in automatically after their password is

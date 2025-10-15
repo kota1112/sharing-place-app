@@ -1,10 +1,17 @@
+# config/routes.rb
 Rails.application.routes.draw do
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
+  # 認証系（JSON専用コントローラへ接続）
+  scope :auth do
+    devise_for :users, path: '', defaults: { format: :json },
+      controllers: {
+        sessions: 'users/sessions',
+        registrations: 'users/registrations'
+      }
+  end
 
-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
-  # Can be used by load balancers and uptime monitors to verify that the app is live.
-  get "up" => "rails/health#show", as: :rails_health_check
+  # Places CRUD（写真はActive Storage経由でURL返却）
+  resources :places
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # ヘルスチェック（任意）
+  get 'up' => 'rails/health#show', as: :rails_health_check
 end

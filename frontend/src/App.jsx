@@ -1,35 +1,21 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import Footer from "./components/footer/Footer";
+import Header from "./components/header/Header";
+import Home2 from "./pages/Home2";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+return (
+// ヘッダー: h-14 固定、フッター: h-14 固定
+// => 本文に pt-14 / pb-14 を確保して重なりを回避
+<div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-50">
+<Header />
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+
+<div className="pt-14 pb-14 min-h-screen flex flex-col">
+<Home2/>
+</div>
+
+
+<Footer />
+</div>
+)
 }
-
-export default App

@@ -12,6 +12,8 @@ Rails.application.routes.draw do
   # Places CRUD（写真はActive Storage経由でURL返却）
   resources :places
 
+  get 'me', to: 'profiles#me'
+
   # ヘルスチェック（任意）
   get 'up' => 'rails/health#show', as: :rails_health_check
 end

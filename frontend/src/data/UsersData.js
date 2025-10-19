@@ -1,10 +1,3 @@
-const UsersData = [
-    {
+import { defaultAllowedOrigins } from "vite";
 
-    },{
-
-    },
-    {
-        
-    }
-]
+const UsersData = [{}, {}, {}];

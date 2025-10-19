@@ -1,6 +1,6 @@
 # config/routes.rb
 Rails.application.routes.draw do
-  # 認証系（JSON専用コントローラへ接続）
+  # ===== 認証（Devise + JWT）: すべて JSON 想定 =====
   scope :auth do
     devise_for :users,
       path: '',
@@ -10,18 +10,23 @@ Rails.application.routes.draw do
         registrations: 'users/registrations'
       }
 
-    # 追加: 現在ユーザー取得（JWT 必須）
+    # 現在のユーザー情報（JWT 必須）
     devise_scope :user do
       get 'me', to: 'users/sessions#me', defaults: { format: :json }
     end
   end
 
-  # Places CRUD（常にJSONを返すなら defaults を付けておくと安全）
-  resources :places, defaults: { format: :json }
+  # ===== Places =====
+  # 常に JSON を返す。自分の Place 一覧は /places/mine
+  resources :places, defaults: { format: :json } do
+    collection do
+      get :mine  # => PlacesController#mine（要: authenticate_user!）
+    end
+  end
 
-  # 既存の /me は混乱しやすいので基本は削除推奨（下行は削除）
+  # （旧）/me は混乱防止のため削除推奨
   # get 'me', to: 'profiles#me'
 
-  # ヘルスチェック（任意）
+  # ヘルスチェック
   get 'up' => 'rails/health#show', as: :rails_health_check
 end

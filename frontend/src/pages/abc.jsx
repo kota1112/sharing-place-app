@@ -1,9 +1,6 @@
-import React from 'react'
+import A from './a';
 
-const abc = () => {
-  return (
-    <div>abc</div>
-  )
+
+export default function Abc() {
+  return <A />;
 }
-
-export default abc

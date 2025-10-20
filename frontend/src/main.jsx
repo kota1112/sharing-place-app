@@ -13,16 +13,18 @@ import LogOut from "./pages/LogOut.jsx";
 import Post from "./pages/Post.jsx";
 import LogIn from "./pages/LogIn.jsx";
 import PlacePage from "./pages/PlacePage.jsx";
-import App2 from "./components/try/App2.jsx";
 import Layout from "./components/try/Layout.jsx";
 import App3 from "./components/try/App3.jsx";
 import Home2 from "./pages/Home2.jsx";
 import NewMypage from "./components/NewMypage/NewMypage.jsx";
+import Abc from "./pages/abc.jsx";
+
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
+        <Route path="/abc" element={<Abc />} />
         <Route path="/app" element={<App />} />
         <Route path="/home" element={<Home />} />
         <Route path="/home2" element={<Home2 />} />
@@ -35,7 +37,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/log-out" element={<LogOut />} />
         <Route path="/places/new" element={<PlaceNew />} />
         <Route path="/post" element={<Post />} />
-        <Route path="/app2" element={<App2 />} />
         <Route path="/app3" element={<App3 />} />
         <Route path="/layout" element={<Layout />} />
       </Routes>

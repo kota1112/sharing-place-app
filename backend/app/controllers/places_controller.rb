@@ -7,9 +7,9 @@ class PlacesController < ApplicationController
   before_action :set_place, only: %i[show update destroy]
 
   # GET /places
-  # 公開：軽量フィールドのみ
+  # 公開：軽量フィールド + 先頭写真URL（なければ null）
   def index
-    places = Place.order(created_at: :desc).limit(50)
+    places = Place.with_attached_photos.order(created_at: :desc).limit(50)
     render json: places.map { |p| place_index_json(p) }
   end
 
@@ -52,9 +52,9 @@ class PlacesController < ApplicationController
   end
 
   # GET /places/mine
-  # ★追加：自分が作成した Place の一覧（要JWT）
+  # 自分が作成した Place の一覧（要JWT）
   def mine
-    places = Place.where(author_id: current_user.id).order(created_at: :desc)
+    places = Place.with_attached_photos.where(author_id: current_user.id).order(created_at: :desc)
     render json: places.map { |p| place_index_json(p) }
   end
 
@@ -72,7 +72,7 @@ class PlacesController < ApplicationController
     )
   end
 
-  # index / mine 用（軽量）
+  # index / mine 用（軽量 + 先頭写真URL）
   def place_index_json(place)
     {
       id: place.id,
@@ -80,11 +80,12 @@ class PlacesController < ApplicationController
       city: place.city,
       description: place.description,
       latitude: place.latitude,
-      longitude: place.longitude
+      longitude: place.longitude,
+      first_photo_url: first_photo_abs_url(place) # ← 追加
     }
   end
 
-  # show 用（詳細 + 写真URL）
+  # show 用（詳細 + 写真URL配列）
   def place_show_json(place)
     {
       id: place.id,
@@ -100,17 +101,21 @@ class PlacesController < ApplicationController
       google_place_id: place.google_place_id,
       phone: place.phone,
       website_url: place.website_url,
-      photo_urls: place.photos.map { |p| url_for(p) }
+      photo_urls: place.photos.map { |p| rails_blob_url(p, host: request.base_url) } # 絶対URL
     }
   end
 
+  # 先頭写真の絶対URL（なければ nil）
+  def first_photo_abs_url(place)
+    return nil unless place.photos.attached?
+    rails_blob_url(place.photos.first, host: request.base_url)
+  end
+
   # multipart/form-data の photos[] を受け取って添付
-  # Thunder Client/ブラウザ：Body -> Form で photos[] を複数ファイル指定
   def attach_photos(record)
     return unless params[:photos].present?
     Array(params[:photos]).each do |file|
-      # file は ActionDispatch::Http::UploadedFile を想定
-      record.photos.attach(file)
+      record.photos.attach(file) # ActionDispatch::Http::UploadedFile を想定
     end
   end
 

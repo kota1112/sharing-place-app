@@ -1,9 +1,14 @@
-import React from 'react'
+import Navbar from "../components/Navbar/Navbar";
+import NefFooter from "../components/NewFooter/NewFooter";
+import A from "./a";
 
-const abc = () => {
+export default function Abc() {
   return (
-    <div>abc</div>
-  )
+    <>
+      <Navbar />
+      <Navbar />
+      <A />
+      <NefFooter />
+    </>
+  );
 }
-
-export default abc

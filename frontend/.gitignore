@@ -3,5 +3,7 @@
 /coverage/
 /.env
 /.env.*
+/.env.development
+/.env.production
 /.env.*.local
 .DS_Store

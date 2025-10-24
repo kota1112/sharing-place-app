@@ -27,7 +27,6 @@ export default function LogIn(){
       <button className="bg-black text-white px-4 py-2 w-full">Sign in</button>
     </form>
     <div>---------</div>
-    <Link to={"/sign-up"}>Sign Up</Link>
     </>
   );
 }

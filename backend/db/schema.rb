@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_10_15_131223) do
+ActiveRecord::Schema[8.0].define(version: 2025_10_22_023519) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -57,7 +57,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_15_131223) do
     t.datetime "deleted_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "geocoded_at"
+    t.string "geocode_provider"
+    t.boolean "geocode_permitted", default: false, null: false
+    t.string "geocode_terms_version"
     t.index ["author_id"], name: "index_places_on_author_id"
+    t.index ["geocoded_at"], name: "index_places_on_geocoded_at"
     t.index ["google_place_id"], name: "index_places_on_google_place_id"
     t.index ["latitude", "longitude"], name: "index_places_on_latitude_and_longitude"
   end

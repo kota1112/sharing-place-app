@@ -1,13 +1,14 @@
 // /* global google */
-// ホームページ用 MapView（初回でもボタンでも現在地取得／インジケーター表示／堅牢なフォールバック）
+// src/使う、参考/components/views/MapView.jsx
+// 初期表示は「先頭アイテムの位置 (zoom=12)」で描画 → 直後に geolocation を自動試行（1回）
+// ボタン「現在地を使う」でも同ロジック（失敗時は先頭へ戻す）
 
 import { useEffect, useRef, useState } from "react";
 import { ensureMaps } from "../../../lib/maps";
 
-// .env に MAP ID を設定していればベクターマップ + AdvancedMarker
 const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
 
-/* ========== geolocation 1回だけ（Promise化） ========== */
+/* geolocation を1回（Promise化） */
 function getCurrentPositionOnce(opts) {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -18,24 +19,6 @@ function getCurrentPositionOnce(opts) {
   });
 }
 
-/* ========== 前回位置のキャッシュ（ホームページ用キー） ========== */
-const LAST_POS_KEY = "homepage:lastpos";
-function saveLastPos(lat, lng) {
-  try {
-    localStorage.setItem(
-      LAST_POS_KEY,
-      JSON.stringify({ lat, lng, ts: Date.now() })
-    );
-  } catch {}
-}
-function loadLastPos() {
-  try {
-    const j = JSON.parse(localStorage.getItem(LAST_POS_KEY));
-    if (j && typeof j.lat === "number" && typeof j.lng === "number") return j;
-  } catch {}
-  return null;
-}
-
 export default function MapView({ items = [] }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -43,11 +26,25 @@ export default function MapView({ items = [] }) {
   const markersRef = useRef([]);
   const myMarkerRef = useRef(null);
 
-  // 右上の UI 状態
   const [locating, setLocating] = useState(false);
   const [locErr, setLocErr] = useState("");
 
-  /* ========== 初期化：地図生成 → マーカー表示 → 自動で現在地取得 ========== */
+  // 先頭 or 東京駅
+  const firstPos = (() => {
+    const first = items.find(
+      (p) =>
+        p &&
+        p.latitude != null &&
+        p.longitude != null &&
+        !Number.isNaN(+p.latitude) &&
+        !Number.isNaN(+p.longitude)
+    );
+    return first
+      ? { lat: +first.latitude, lng: +first.longitude, hasFirst: true }
+      : { lat: 35.681236, lng: 139.767125, hasFirst: false }; // 東京駅
+  })();
+
+  // 初期描画 → 自動 geolocation を１回試行
   useEffect(() => {
     let cancelled = false;
 
@@ -57,7 +54,20 @@ export default function MapView({ items = [] }) {
         const g = window.google;
         if (!g?.maps || cancelled || !containerRef.current) return;
 
-        // 緯度経度を持つものだけ
+        const canImport = typeof g.maps.importLibrary === "function";
+        const { Map } = canImport
+          ? await g.maps.importLibrary("maps")
+          : { Map: g.maps.Map };
+
+        const map = new Map(containerRef.current, {
+          center: { lat: firstPos.lat, lng: firstPos.lng },
+          zoom: firstPos.hasFirst ? 12 : 5,
+          ...(MAP_ID ? { mapId: MAP_ID } : {}),
+        });
+        mapRef.current = map;
+        infoRef.current = new g.maps.InfoWindow();
+
+        // マーカー描画
         const withCoords = items.filter(
           (p) =>
             p &&
@@ -66,36 +76,10 @@ export default function MapView({ items = [] }) {
             !Number.isNaN(+p.latitude) &&
             !Number.isNaN(+p.longitude)
         );
-
-        // 初期センター：先頭 or 東京駅
-        const fallbackCenter = withCoords.length
-          ? { lat: +withCoords[0].latitude, lng: +withCoords[0].longitude }
-          : { lat: 35.681236, lng: 139.767125 }; // 東京駅
-
-        // Map 生成
-        const canImport = typeof g.maps.importLibrary === "function";
-        const { Map } = canImport
-          ? await g.maps.importLibrary("maps")
-          : { Map: g.maps.Map };
-
-        const map = new Map(containerRef.current, {
-          center: fallbackCenter,
-          zoom: withCoords.length ? 12 : 4,
-          ...(MAP_ID ? { mapId: MAP_ID } : {}),
-          // ページスクロールより地図操作を優先したい場合は "greedy"
-          gestureHandling: "auto",
-          mapTypeControl: true,
-          fullscreenControl: true,
-        });
-        mapRef.current = map;
-        infoRef.current = new g.maps.InfoWindow();
-
-        // 地点マーカー
         await drawPlaceMarkers(withCoords);
 
-        // ★ 初回も現在地取得を試みる（MyPlacesMap と同様の体験）
-        //    → インジケーターが表示される
-        acquireLocation(false);
+        // ★ 初回だけ自動で geolocation を試す（UIにインジケータ表示）
+        acquireMyLocation({ fromButton: false });
       } catch (e) {
         console.error("[MapView] init failed:", e);
       }
@@ -104,15 +88,14 @@ export default function MapView({ items = [] }) {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+  }, [items]); // 先頭が変われば再初期化
 
-  /* ========== places のマーカーを張る ========== */
+  // マーカー描画
   async function drawPlaceMarkers(withCoords) {
     const g = window.google;
     const map = mapRef.current;
     if (!g?.maps || !map) return;
 
-    // 旧マーカー片付け
     markersRef.current.forEach((m) => m.setMap?.(null));
     markersRef.current = [];
 
@@ -148,7 +131,6 @@ export default function MapView({ items = [] }) {
     });
   }
 
-  /* ========== InfoWindow を開く ========== */
   function openInfo(place, anchor) {
     const g = window.google;
     const info = infoRef.current;
@@ -159,27 +141,14 @@ export default function MapView({ items = [] }) {
     info.open({ map, anchor });
   }
 
-  /* ========== 現在地取得（自動／ボタン共通ロジック） ========== */
-  async function acquireLocation(fromButton = true) {
+  // 位置取得（自動 / ボタン共通）
+  async function acquireMyLocation({ fromButton }) {
     const g = window.google;
     const map = mapRef.current;
     if (!g?.maps || !map) return;
 
     setLocErr("");
     setLocating(true);
-
-    // 失敗時フォールバック：先頭座標
-    const first = items.find(
-      (p) =>
-        p &&
-        p.latitude != null &&
-        p.longitude != null &&
-        !Number.isNaN(+p.latitude) &&
-        !Number.isNaN(+p.longitude)
-    );
-    const firstPos = first
-      ? { lat: +first.latitude, lng: +first.longitude }
-      : null;
 
     const tryGet = (opts) =>
       getCurrentPositionOnce(opts).then(
@@ -188,16 +157,11 @@ export default function MapView({ items = [] }) {
       );
 
     try {
-      // MyPlacesMap と同じ「2段階リトライ」ポリシー
-      const tries = fromButton
-        ? [
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
-          ]
-        : [
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
-          ];
+      // 自動もボタンも同じ順序でOK（低精度→高精度）
+      const tries = [
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
+      ];
 
       let got = null;
       for (const t of tries) {
@@ -208,80 +172,69 @@ export default function MapView({ items = [] }) {
         }
       }
 
-      if (got) {
-        const { latitude, longitude } = got.coords;
-        const pos = { lat: latitude, lng: longitude };
-
-        // 中心＆ズーム
-        map.setCenter(pos);
-        map.setZoom(14);
-
-        // 自分のピン
-        if (myMarkerRef.current) {
-          myMarkerRef.current.setMap?.(null);
-          myMarkerRef.current = null;
+      if (!got) {
+        // 失敗 → 先頭の位置（zoom=12）に据え置き
+        if (firstPos.hasFirst) {
+          map.setCenter({ lat: firstPos.lat, lng: firstPos.lng });
+          map.setZoom(12);
         }
-        const canImport = typeof g.maps.importLibrary === "function";
-        if (canImport) {
-          const { AdvancedMarkerElement, PinElement } =
-            await g.maps.importLibrary("marker");
-          const pin = new PinElement({
-            glyphText: "ME",
-            background: "#2563eb",
-            glyphColor: "#fff",
-          });
-          myMarkerRef.current = new AdvancedMarkerElement({
-            map,
-            position: pos,
-            content: pin.element,
-            title: "You are here",
-          });
-        } else {
-          myMarkerRef.current = new g.maps.Marker({
-            map,
-            position: pos,
-            title: "You are here",
-            icon: {
-              path: g.maps.SymbolPath.CIRCLE,
-              scale: 6,
-              fillColor: "#2563eb",
-              fillOpacity: 1,
-              strokeWeight: 2,
-              strokeColor: "#ffffff",
-            },
-          });
+        if (fromButton) {
+          setLocErr("位置情報を取得できませんでした。先頭の場所を表示します。");
         }
-
-        // キャッシュ
-        saveLastPos(pos.lat, pos.lng);
         return;
       }
 
-      // 失敗：前回位置 or 先頭アイテム or そのまま
-      const last = loadLastPos();
-      if (last) {
-        map.setCenter({ lat: last.lat, lng: last.lng });
-        map.setZoom(14);
-        setLocErr("現在地取得に失敗。前回の位置を表示しました。");
-      } else if (firstPos) {
-        map.setCenter(firstPos);
-        map.setZoom(12);
-        setLocErr("現在地取得に失敗。先頭の場所を表示しました。");
+      // 成功 → 現在地マーカー配置 & ズーム 14
+      const pos = { lat: got.coords.latitude, lng: got.coords.longitude };
+      map.setCenter(pos);
+      map.setZoom(14);
+
+      if (myMarkerRef.current) {
+        myMarkerRef.current.setMap?.(null);
+        myMarkerRef.current = null;
+      }
+
+      const canImport = typeof g.maps.importLibrary === "function";
+      if (canImport) {
+        const { AdvancedMarkerElement, PinElement } =
+          await g.maps.importLibrary("marker");
+        const pin = new PinElement({
+          glyphText: "ME",
+          background: "#2563eb",
+          glyphColor: "#fff",
+        });
+        myMarkerRef.current = new AdvancedMarkerElement({
+          map,
+          position: pos,
+          content: pin.element,
+          title: "You are here",
+        });
       } else {
-        setLocErr("現在地を取得できませんでした。");
+        myMarkerRef.current = new g.maps.Marker({
+          map,
+          position: pos,
+          title: "You are here",
+          icon: {
+            path: g.maps.SymbolPath.CIRCLE,
+            scale: 6,
+            fillColor: "#2563eb",
+            fillOpacity: 1,
+            strokeWeight: 2,
+            strokeColor: "#ffffff",
+          },
+        });
       }
     } finally {
       setLocating(false);
     }
   }
 
-  /* ========== UI ========== */
   return (
     <div className="relative">
-      {/* Map 本体 */}
+      {/* Map本体 */}
       <div ref={containerRef} className="h-96 w-full rounded-xl border" />
 
-      {/* 右上コントロール（インジケーター＋ボタン） */}
+      {/* 右上コントロール */}
       <div className="pointer-events-none absolute right-3 top-3 flex gap-2">
         {locating && (
           <div className="pointer-events-auto rounded-lg bg-white/95 px-3 py-2 text-sm shadow">
@@ -308,7 +261,7 @@ export default function MapView({ items = [] }) {
 
         <button
           type="button"
-          onClick={() => acquireLocation(true)}
+          onClick={() => acquireMyLocation({ fromButton: true })}
           disabled={locating}
           className="pointer-events-auto rounded-lg bg-white/95 px-3 py-2 text-sm shadow hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
           title="現在地を使う"
@@ -317,7 +270,7 @@ export default function MapView({ items = [] }) {
         </button>
       </div>
 
-      {/* エラー・トースト（右下） */}
+      {/* 右下エラー表示 */}
       {locErr && (
         <div className="pointer-events-none absolute bottom-3 right-3 rounded-lg bg-red-600 px-3 py-2 text-sm text-white shadow">
           {locErr}
@@ -327,7 +280,7 @@ export default function MapView({ items = [] }) {
   );
 }
 
-/* ========== InfoWindow の中身（小サムネ＋本文） ========== */
+/* ====== InfoWindow ====== */
 
 function buildMapsUrl(p) {
   if (p.google_place_id) {
@@ -359,20 +312,13 @@ function buildInfoHtml(p) {
   const thumb = p.first_photo_url
     ? `<img src="${escapeHtml(p.first_photo_url)}" alt="${escapeHtml(
         p.name || ""
-      )}" style="
-            width:72px;height:72px;border-radius:10px;object-fit:cover;
-            flex:none;display:block;
-        " />`
-    : `<div style="
-            width:72px;height:72px;border-radius:10px;background:#e5e7eb;
-            display:flex;align-items:center;justify-content:center;
-            color:#6b7280;font-size:12px;flex:none;
-        ">No image</div>`;
+      )}" style="width:72px;height:72px;border-radius:10px;object-fit:cover;flex:none;display:block;" />`
+    : `<div style="width:72px;height:72px;border-radius:10px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:12px;flex:none;">No image</div>`;
 
   const name = p.name
-    ? `<div style="font-weight:700;font-size:14px;line-height:1.3;">
-         ${escapeHtml(p.name)}
-       </div>`
+    ? `<div style="font-weight:700;font-size:14px;line-height:1.3;">${escapeHtml(
+        p.name
+      )}</div>`
     : "";
 
   const addr =
@@ -381,17 +327,17 @@ function buildInfoHtml(p) {
     [p.city, p.state, p.postal_code, p.country].filter(Boolean).join(" ") ||
     "";
   const addrHtml = addr
-    ? `<div style="font-size:12px;color:#374151;margin-top:2px;">
-         ${escapeHtml(addr)}
-       </div>`
+    ? `<div style="font-size:12px;color:#374151;margin-top:2px;">${escapeHtml(
+        addr
+      )}</div>`
     : "";
 
   const desc = (p.description || "").trim();
   const descShort = desc.length > 60 ? `${desc.slice(0, 60)}…` : desc;
   const descHtml = descShort
-    ? `<div style="font-size:12px;color:#111827;margin-top:6px;">
-         ${escapeHtml(descShort)}
-       </div>`
+    ? `<div style="font-size:12px;color:#111827;margin-top:6px;">${escapeHtml(
+        descShort
+      )}</div>`
     : "";
 
   const mapsUrl = buildMapsUrl(p);
@@ -406,16 +352,9 @@ function buildInfoHtml(p) {
         ${descHtml}
       </div>
     </div>
-
     <div style="display:flex;gap:8px;margin-top:10px;">
-      <a href="/places/${p.id}" style="
-           text-decoration:none;background:#111827;color:#fff;
-           padding:8px 10px;border-radius:10px;font-size:12px;
-         ">詳細を見る</a>
-      <a href="${mapsUrl}" target="_blank" rel="noopener" style="
-           text-decoration:none;background:#e5e7eb;color:#111827;
-           padding:8px 10px;border-radius:10px;font-size:12px;
-         ">Google マップで見る</a>
+      <a href="/places/${p.id}" style="text-decoration:none;background:#111827;color:#fff;padding:8px 10px;border-radius:10px;font-size:12px;">詳細を見る</a>
+      <a href="${mapsUrl}" target="_blank" rel="noopener" style="text-decoration:none;background:#e5e7eb;color:#111827;padding:8px 10px;border-radius:10px;font-size:12px;">Google マップで見る</a>
     </div>
   </div>`;
 }

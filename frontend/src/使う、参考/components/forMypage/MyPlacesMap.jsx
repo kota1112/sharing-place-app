@@ -1,11 +1,14 @@
-// src/使う、参考/components/forMypage/MyPlacesMap.jsx
 // /* global google */
+// src/使う、参考/components/forMypage/MyPlacesMap.jsx
+// 初期表示は「先頭アイテムの位置 (zoom=12)」→ 直後に geolocation を自動試行（1回）
+// 右上の独自コントロール「現在地を使う」でも同ロジック（失敗時は先頭へ）
+
 import { useEffect, useRef } from "react";
 import { ensureMaps } from "../../../lib/maps";
 
 const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
 
-// --- geolocation 1回だけ取得（Promise 化） ---
+// geolocation 1回
 function getCurrentPositionOnce(opts) {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -16,35 +19,13 @@ function getCurrentPositionOnce(opts) {
   });
 }
 
-// --- 前回位置のキャッシュ ---
-const LAST_POS_KEY = "mypage:lastpos";
-function saveLastPos(lat, lng) {
-  try {
-    localStorage.setItem(
-      LAST_POS_KEY,
-      JSON.stringify({ lat, lng, ts: Date.now() })
-    );
-  } catch {}
-}
-function loadLastPos() {
-  try {
-    const j = JSON.parse(localStorage.getItem(LAST_POS_KEY));
-    if (j && typeof j.lat === "number" && typeof j.lng === "number") return j;
-  } catch {}
-  return null;
-}
-
 export default function MyPlacesMap({ items = [], greedyScroll = false }) {
   const ref = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    let map,
-      meMarker,
-      btnDiv,
-      toast,
-      indicator,
-      advanced = false;
+    let map, meMarker, btnDiv, advanced = false;
+    let spinnerDiv, toastDiv;
 
     (async () => {
       await ensureMaps();
@@ -53,14 +34,28 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
       const g = window.google;
       const canImport = typeof g.maps.importLibrary === "function";
 
-      // ---- Map 準備（ベクター/ラスタ両対応）----
+      // 先頭 or 東京駅
+      const first = items.find(
+        (p) =>
+          p &&
+          p.latitude != null &&
+          p.longitude != null &&
+          !Number.isNaN(+p.latitude) &&
+          !Number.isNaN(+p.longitude)
+      );
+      const defaultCenter = first
+        ? { lat: +first.latitude, lng: +first.longitude }
+        : { lat: 35.681236, lng: 139.767125 };
+
       const mapOpts = {
-        zoom: 5,
+        center: defaultCenter,
+        zoom: first ? 12 : 5,
         ...(MAP_ID ? { mapId: MAP_ID } : {}),
         gestureHandling: greedyScroll ? "greedy" : "auto",
         mapTypeControl: true,
         fullscreenControl: true,
       };
+
       if (canImport) {
         const { Map } = await g.maps.importLibrary("maps");
         map = new Map(ref.current, mapOpts);
@@ -69,8 +64,7 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
         map = new g.maps.Map(ref.current, mapOpts);
       }
 
-      // ---- アイテムをプロット ----
-      const bounds = new g.maps.LatLngBounds();
+      // places マーカー
       const valid = items.filter(
         (p) =>
           p &&
@@ -79,46 +73,83 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
           !Number.isNaN(+p.latitude) &&
           !Number.isNaN(+p.longitude)
       );
-
-      if (valid.length > 0) {
-        if (advanced) {
-          const { AdvancedMarkerElement, PinElement } =
-            await g.maps.importLibrary("marker");
+      if (advanced) {
+        const { AdvancedMarkerElement, PinElement } =
+          await g.maps.importLibrary("marker");
         for (const p of valid) {
-            const position = { lat: +p.latitude, lng: +p.longitude };
-            const pin = new PinElement({
-              glyphText: (p.name || "").slice(0, 2).toUpperCase(),
-            });
-            new AdvancedMarkerElement({
-              map,
-              position,
-              content: pin.element,
-              title: p.name || "",
-            });
-            bounds.extend(position);
-          }
-        } else {
-          for (const p of valid) {
-            const position = { lat: +p.latitude, lng: +p.longitude };
-            new g.maps.Marker({ map, position, title: p.name || "" });
-            bounds.extend(position);
-          }
+          const position = { lat: +p.latitude, lng: +p.longitude };
+          const pin = new PinElement({
+            glyphText: (p.name || "").slice(0, 2).toUpperCase(),
+          });
+          new AdvancedMarkerElement({
+            map,
+            position,
+            content: pin.element,
+            title: p.name || "",
+          });
         }
-        map.fitBounds(bounds);
       } else {
-        map.setCenter({ lat: 35.681236, lng: 139.767125 }); // 東京駅
-        map.setZoom(5);
+        for (const p of valid) {
+          const position = { lat: +p.latitude, lng: +p.longitude };
+          new g.maps.Marker({ map, position, title: p.name || "" });
+        }
       }
 
-      // ---- 先頭アイテムの座標（フォールバック用）----
-      const firstPos =
-        valid.length > 0
-          ? { lat: +valid[0].latitude, lng: +valid[0].longitude }
-          : null;
+      // 右上：現在地ボタン
+      btnDiv = document.createElement("div");
+      Object.assign(btnDiv.style, {
+        background: "#fff",
+        borderRadius: "8px",
+        padding: "8px 12px",
+        margin: "10px",
+        cursor: "pointer",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+        fontSize: "13px",
+        userSelect: "none",
+        pointerEvents: "auto",
+      });
+      btnDiv.tabIndex = 0;
+      btnDiv.textContent = "現在地を使う";
+      map.controls[g.maps.ControlPosition.TOP_RIGHT].push(btnDiv);
 
-      // ---- 現在地表示関数 ----
+      // 右上：取得中インジケータ
+      spinnerDiv = document.createElement("div");
+      spinnerDiv.style.cssText =
+        "display:none;background:rgba(255,255,255,0.95);padding:8px 10px;margin:10px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.2);font-size:12px;";
+      spinnerDiv.innerHTML =
+        `<span style="display:inline-block;width:14px;height:14px;border:3px solid #cbd5e1;border-top-color:#334155;border-radius:50%;margin-right:6px;vertical-align:-2px;animation:spin 1s linear infinite"></span>位置情報を取得中…`;
+      map.controls[g.maps.ControlPosition.TOP_RIGHT].push(spinnerDiv);
+
+      // 下右：トースト（失敗時）
+      toastDiv = document.createElement("div");
+      Object.assign(toastDiv.style, {
+        position: "absolute",
+        right: "10px",
+        bottom: "10px",
+        background: "rgba(220,38,38,0.95)",
+        color: "#fff",
+        padding: "8px 10px",
+        borderRadius: "8px",
+        fontSize: "12px",
+        zIndex: "9999",
+        display: "none",
+      });
+      ref.current.appendChild(toastDiv);
+      const showToast = (msg, ms = 2200) => {
+        toastDiv.textContent = msg;
+        toastDiv.style.display = "block";
+        setTimeout(() => (toastDiv.style.display = "none"), ms);
+      };
+
+      const setBusy = (busy) => {
+        if (!btnDiv || !spinnerDiv) return;
+        btnDiv.textContent = busy ? "取得中…" : "現在地を使う";
+        btnDiv.style.opacity = busy ? "0.7" : "1";
+        btnDiv.style.pointerEvents = busy ? "none" : "auto";
+        spinnerDiv.style.display = busy ? "block" : "none";
+      };
+
       const showMe = (lat, lng) => {
-        if (cancelled) return;
         const pos = { lat, lng };
         if (meMarker) {
           if (advanced) meMarker.position = pos;
@@ -126,9 +157,8 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
         } else {
           if (advanced) {
             (async () => {
-              const { AdvancedMarkerElement } = await g.maps.importLibrary(
-                "marker"
-              );
+              const { AdvancedMarkerElement } =
+                await g.maps.importLibrary("marker");
               const el = document.createElement("div");
               el.style.width = "12px";
               el.style.height = "12px";
@@ -161,64 +191,10 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
         }
         map.panTo(pos);
         map.setZoom(Math.max(map.getZoom(), 14));
-        saveLastPos(lat, lng);
       };
 
-      // ---- 取得中インジケーター ----
-      indicator = document.createElement("div");
-      Object.assign(indicator.style, {
-        position: "absolute",
-        right: "10px",
-        top: "10px",
-        background: "rgba(255,255,255,0.95)",
-        padding: "8px 10px",
-        borderRadius: "8px",
-        fontSize: "12px",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
-        display: "none",
-        zIndex: "9999",
-      });
-      indicator.innerHTML =
-        '<span class="spin" style="display:inline-block;width:14px;height:14px;border:2px solid #999;border-top-color:transparent;border-radius:50%;margin-right:6px;vertical-align:-2px;animation:mapspin 0.8s linear infinite"></span> 位置情報を取得中…';
-      // 簡易 keyframes
-      const style = document.createElement("style");
-      style.textContent =
-        "@keyframes mapspin{to{transform:rotate(360deg)}}";
-      document.head.appendChild(style);
-      ref.current.appendChild(indicator);
-
-      const setBusy = (busy) => {
-        if (btnDiv) {
-          btnDiv.style.opacity = busy ? "0.7" : "1";
-          btnDiv.style.pointerEvents = busy ? "none" : "auto";
-          btnDiv.textContent = busy ? "取得中…" : "現在地を使う";
-        }
-        indicator.style.display = busy ? "block" : "none";
-      };
-
-      // ---- トースト ----
-      toast = document.createElement("div");
-      Object.assign(toast.style, {
-        position: "absolute",
-        right: "10px",
-        top: "56px",
-        background: "rgba(17,17,17,0.9)",
-        color: "#fff",
-        padding: "8px 10px",
-        borderRadius: "8px",
-        fontSize: "12px",
-        zIndex: "9999",
-        display: "none",
-      });
-      ref.current.appendChild(toast);
-      const showToast = (msg, ms = 2400) => {
-        toast.textContent = msg;
-        toast.style.display = "block";
-        setTimeout(() => (toast.style.display = "none"), ms);
-      };
-
-      // ---- 位置取得（MyPage 版・段階的トライ & 前回位置）----
-      async function acquire(fromButton = false) {
+      // 取得共通ロジック（ボタン/自動）
+      async function acquire() {
         const tryGet = (opts) =>
           getCurrentPositionOnce(opts).then(
             (pos) => ({ ok: true, pos }),
@@ -228,89 +204,52 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
         try {
           setBusy(true);
 
-          // クリック時は「低精度→高精度」、自動時は「高精度→低精度」
-          const tries = fromButton
-            ? [
-                { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
-                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
-              ]
-            : [
-                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
-                { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
-              ];
+          const tries = [
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
+          ];
 
           let got = null;
-          for (const o of tries) {
-            const r = await tryGet(o);
+          for (const t of tries) {
+            const r = await tryGet(t);
             if (r.ok) {
               got = r.pos;
               break;
             }
           }
 
-          if (got) {
-            const { latitude, longitude } = got.coords;
-            showMe(latitude, longitude);
-            showToast("現在地を表示しました");
+          if (!got) {
+            // 失敗 → 先頭の位置（zoom=12）に据え置き
+            if (first) {
+              map.setCenter(defaultCenter);
+              map.setZoom(12);
+            }
+            showToast("現在地取得に失敗しました。先頭の場所を表示します。");
             return;
           }
 
-          // 失敗時：前回位置 or 先頭アイテム（zoom 12）
-          const last = loadLastPos();
-          if (last) {
-            showMe(last.lat, last.lng);
-            showToast("取得失敗。前回の位置を表示しました");
-          } else if (firstPos) {
-            map.setCenter(firstPos);
-            map.setZoom(12);
-            showToast("取得失敗。先頭の場所を表示しました");
-          } else {
-            showToast("現在地取得に失敗しました");
-          }
+          const { latitude, longitude } = got.coords;
+          showMe(latitude, longitude);
         } finally {
           setBusy(false);
         }
       }
 
-      // ---- 現在地ボタン（TOP_RIGHT）----
-      btnDiv = document.createElement("div");
-      Object.assign(btnDiv.style, {
-        background: "#fff",
-        borderRadius: "8px",
-        padding: "8px 12px",
-        margin: "10px",
-        cursor: "pointer",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
-        fontSize: "13px",
-        userSelect: "none",
-        pointerEvents: "auto",
-      });
-      btnDiv.tabIndex = 0;
-      btnDiv.textContent = "現在地を使う";
-      map.controls[g.maps.ControlPosition.TOP_RIGHT].push(btnDiv);
-
-      btnDiv.onclick = () => acquire(true);
+      // ボタン動作
+      btnDiv.onclick = () => acquire();
       btnDiv.onkeydown = (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          acquire(true);
+          acquire();
         }
       };
 
-      // 初回は自動取得
-      acquire(false);
+      // ★ 初回だけ自動で geolocation を試す
+      acquire();
     })();
 
     return () => {
       cancelled = true;
-      // DOM 片付け（toast / indicator）
-      if (ref.current) {
-        Array.from(ref.current.querySelectorAll(":scope > div")).forEach((d) => {
-          try {
-            if (d.style?.position === "absolute") ref.current.removeChild(d);
-          } catch {}
-        });
-      }
     };
   }, [items, greedyScroll]);
 

@@ -8,6 +8,8 @@ import PlacesHomepage from "./使う、参考/pages/PlacesHomepage.jsx";
 import PlaceNew from "./pages/PlaceNew.jsx";
 import LogIn from "./pages/LogIn.jsx";
 import PlacesIndex from "./pages/PlacesIndex.jsx";
+import PlaceDetail from "./使う、参考/pages/PlaceDetail.jsx";
+import MyPage from "./使う、参考/pages/MyPage.jsx";
 
 // /* ===== 開発用: Vite の env をブラウザ(console)で確認できるようにする =====
 //    テストが終わったら削除してOK（本番では残さない） */
@@ -21,14 +23,15 @@ import PlacesIndex from "./pages/PlacesIndex.jsx";
 //   // console.log("[Maps key exists?]", !!window.__MAPS_KEY__);
 // }
 // /* ================================================================== */
-PlacesIndex;
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/place-homepage" element={<PlacesHomepage />} />
+        <Route path="//places/:id" element={<PlaceDetail />} />
         <Route path="/place/new" element={<PlaceNew />} />
+        <Route path="/mypage" element={<MyPage />} />
         <Route path="/login" element={<LogIn />} />
         <Route path="/index" element={<PlacesIndex />} />
       </Routes>

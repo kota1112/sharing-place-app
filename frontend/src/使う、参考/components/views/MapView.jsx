@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import { ensureMaps } from "../../../lib/maps";
 
+// .env に設定していればベクターマップ + AdvancedMarker が有効になります
 const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
 
 export default function MapView({ items = [] }) {
@@ -26,52 +27,54 @@ export default function MapView({ items = [] }) {
         );
         if (withCoords.length === 0) return;
 
-        const center = { lat: +withCoords[0].latitude, lng: +withCoords[0].longitude };
+        const center = {
+          lat: +withCoords[0].latitude,
+          lng: +withCoords[0].longitude,
+        };
         const mapOpts = { center, zoom: 12, ...(MAP_ID ? { mapId: MAP_ID } : {}) };
 
-        const canUseAdvanced = typeof g.maps.importLibrary === "function";
+        const canImport = typeof g.maps.importLibrary === "function";
+        const MapCtor = canImport ? (await g.maps.importLibrary("maps")).Map : g.maps.Map;
+        const map = new MapCtor(ref.current, mapOpts);
 
-        if (canUseAdvanced) {
-          const [{ Map }, { AdvancedMarkerElement, PinElement }] = await Promise.all([
-            g.maps.importLibrary("maps"),
-            g.maps.importLibrary("marker"),
-          ]);
-          if (cancelled || !ref.current) return;
+        // 1つの InfoWindow を使い回す
+        const info = new g.maps.InfoWindow();
 
-          const map = new Map(ref.current, mapOpts);
-          // 動作確認用：MapIDが本当に入っているか
-          console.log("mapId:", map.get("mapId"));
+        // Advanced Marker（ベクター版）準備
+        let AdvancedMarkerElement, PinElement;
+        if (canImport) {
+          const markerLib = await g.maps.importLibrary("marker");
+          AdvancedMarkerElement = markerLib.AdvancedMarkerElement;
+          PinElement = markerLib.PinElement;
+        }
 
-          withCoords.forEach((p) => {
-            const position = { lat: +p.latitude, lng: +p.longitude };
+        withCoords.forEach((p) => {
+          const position = { lat: +p.latitude, lng: +p.longitude };
 
-            // ★ 非推奨の glyph ではなく glyphText を使う
+          let marker;
+          if (AdvancedMarkerElement && PinElement) {
             const pin = new PinElement({
-              glyphText: (p.name || "").slice(0, 2).toUpperCase(),
-              // お好みで:
-              // background: "#ff6b6b",
-              // borderColor: "#b23a48",
-              // glyphColor: "#fff",
+              glyph: (p.name || "").slice(0, 2).toUpperCase(),
             });
-
-            new AdvancedMarkerElement({
+            marker = new AdvancedMarkerElement({
               map,
               position,
               content: pin.element,
               title: p.name || "",
             });
-          });
-          return;
-        }
 
-        // フォールバック（旧API）
-        const map = new g.maps.Map(ref.current, mapOpts);
-        withCoords.forEach((p) => {
-          new g.maps.Marker({
-            map,
-            position: { lat: +p.latitude, lng: +p.longitude },
-            title: p.name || "",
-          });
+            // AdvancedMarker は 'gmp-click' イベント
+            marker.addListener("gmp-click", () => {
+              info.setContent(buildInfoHtml(p));
+              info.open(map, marker);
+            });
+          } else {
+            marker = new g.maps.Marker({ map, position, title: p.name || "" });
+            marker.addListener("click", () => {
+              info.setContent(buildInfoHtml(p));
+              info.open(map, marker);
+            });
+          }
         });
       } catch (e) {
         console.error("[MapView] failed:", e);
@@ -84,4 +87,105 @@ export default function MapView({ items = [] }) {
   }, [items]);
 
   return <div ref={ref} className="h-96 w-full rounded-xl border" />;
+}
+
+/* ========= Utilities ========= */
+
+function buildMapsUrl(p) {
+  if (p.google_place_id) {
+    return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(
+      p.google_place_id
+    )}`;
+  }
+  const addr =
+    p.full_address ||
+    p.address_line ||
+    [p.city, p.state, p.postal_code, p.country].filter(Boolean).join(" ") ||
+    "";
+  const name = p.name || "";
+  const q = [name, addr].filter(Boolean).join(" ");
+  if (q.trim()) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+  }
+  if (p.latitude != null && p.longitude != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      `${p.latitude},${p.longitude}`
+    )}`;
+  }
+  return "https://www.google.com/maps";
+}
+
+/** 小さめサムネ（72x72）＋ 右にテキストのレイアウト */
+function buildInfoHtml(p) {
+  const thumb = p.first_photo_url
+    ? `<img src="${escapeHtml(p.first_photo_url)}" alt="${escapeHtml(
+        p.name || ""
+      )}" style="
+            width:72px;height:72px;border-radius:10px;object-fit:cover;
+            flex:none;display:block;
+        " />`
+    : `<div style="
+            width:72px;height:72px;border-radius:10px;background:#e5e7eb;
+            display:flex;align-items:center;justify-content:center;
+            color:#6b7280;font-size:12px;flex:none;
+        ">No image</div>`;
+
+  const name = p.name
+    ? `<div style="font-weight:700;font-size:14px;line-height:1.3;">
+         ${escapeHtml(p.name)}
+       </div>`
+    : "";
+
+  const addr =
+    p.full_address ||
+    p.address_line ||
+    [p.city, p.state, p.postal_code, p.country].filter(Boolean).join(" ") ||
+    "";
+  const addrHtml = addr
+    ? `<div style="font-size:12px;color:#374151;margin-top:2px;">
+         ${escapeHtml(addr)}
+       </div>`
+    : "";
+
+  const desc = (p.description || "").trim();
+  const descShort = desc.length > 60 ? `${desc.slice(0, 60)}…` : desc;
+  const descHtml = descShort
+    ? `<div style="font-size:12px;color:#111827;margin-top:6px;">
+         ${escapeHtml(descShort)}
+       </div>`
+    : "";
+
+  const mapsUrl = buildMapsUrl(p);
+
+  return `
+  <div style="width:260px;padding:12px 12px 10px;border-radius:14px;">
+    <div style="display:flex;gap:10px;">
+      ${thumb}
+      <div style="min-width:0;flex:1 1 auto;">
+        ${name}
+        ${addrHtml}
+        ${descHtml}
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <a href="/places/${p.id}" style="
+           text-decoration:none;background:#111827;color:#fff;
+           padding:8px 10px;border-radius:10px;font-size:12px;
+         ">詳細を見る</a>
+      <a href="${mapsUrl}" target="_blank" rel="noopener" style="
+           text-decoration:none;background:#e5e7eb;color:#111827;
+           padding:8px 10px;border-radius:10px;font-size:12px;
+         ">Google マップで見る</a>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }

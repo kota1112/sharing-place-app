@@ -1,4 +1,3 @@
-# app/controllers/places_controller.rb
 class PlacesController < ApplicationController
   include Rails.application.routes.url_helpers
 
@@ -81,7 +80,11 @@ class PlacesController < ApplicationController
       description: place.description,
       latitude: place.latitude,
       longitude: place.longitude,
-      first_photo_url: first_photo_abs_url(place) # ← 追加
+      first_photo_url: first_photo_abs_url(place),
+      # 追加フィールド
+      address_line: place.address_line,
+      full_address: place.full_address,
+      address: place.address
     }
   end
 
@@ -101,7 +104,8 @@ class PlacesController < ApplicationController
       google_place_id: place.google_place_id,
       phone: place.phone,
       website_url: place.website_url,
-      photo_urls: place.photos.map { |p| rails_blob_url(p, host: request.base_url) } # 絶対URL
+      full_address: place.full_address,
+      photo_urls: place.photos.map { |p| rails_blob_url(p, host: request.base_url) }
     }
   end
 
@@ -115,7 +119,7 @@ class PlacesController < ApplicationController
   def attach_photos(record)
     return unless params[:photos].present?
     Array(params[:photos]).each do |file|
-      record.photos.attach(file) # ActionDispatch::Http::UploadedFile を想定
+      record.photos.attach(file)
     end
   end
 

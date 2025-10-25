@@ -13,6 +13,11 @@ class Place < ApplicationRecord
     [address_line, city, state, postal_code, country].compact_blank.join(' ')
   end
 
+  # フロント互換用（full_address と同じ値）
+  def address
+    full_address
+  end
+
   private
 
   def geocode_if_needed

@@ -1,4 +1,4 @@
-/* global google */
+// /* global google */
 import { useEffect, useRef } from "react";
 import { ensureMaps } from "../../../lib/maps";
 

@@ -1,3 +1,4 @@
+// src/pages/PlaceDetail.jsx
 // /* global google */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -21,7 +22,6 @@ export default function PlaceDetail() {
         const json = await res.json();
         if (!dead) setPlace(json);
       } catch (e) {
-        // 先頭 <!doctype の HTML が返ってしまう場合は API ベースURL/Proxy を見直してください
         setErr(
           "読み込みに失敗しました: " +
             (e?.message || "Unknown error") +
@@ -37,7 +37,7 @@ export default function PlaceDetail() {
   if (err) {
     return (
       <div className="mx-auto max-w-5xl p-6">
-        <pre className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 whitespace-pre-wrap">
+        <pre className="whitespace-pre-wrap rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {err}
         </pre>
         <Link to="/place-homepage" className="mt-4 inline-block text-blue-600 hover:underline">
@@ -62,7 +62,7 @@ export default function PlaceDetail() {
         ← Back
       </Link>
 
-      <h1 className="text-3xl font-semibold">{place.name}</h1>
+      <h1 className="text-3xl font-semibold break-words">{place.name}</h1>
 
       {/* Hero 画像 */}
       {place.photo_urls?.[0] && (
@@ -76,7 +76,7 @@ export default function PlaceDetail() {
       {/* アドレス・説明 */}
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <h2 className="mb-2 text-lg font-medium">Address</h2>
-        <p className="text-gray-700">
+        <p className="break-words text-gray-700">
           {place.full_address ||
             [place.address_line, place.city, place.state, place.postal_code, place.country]
               .filter(Boolean)
@@ -85,7 +85,10 @@ export default function PlaceDetail() {
         {place.description && (
           <>
             <div className="mt-4 h-px w-full bg-gray-100" />
-            <p className="mt-4 whitespace-pre-wrap text-gray-800">{place.description}</p>
+            {/* 長文でも横に膨らまないように：pre を保ちつつ単語途中で折り返し */}
+            <p className="mt-4 whitespace-pre-wrap break-words leading-relaxed text-gray-800">
+              {place.description}
+            </p>
           </>
         )}
       </section>
@@ -114,7 +117,7 @@ export default function PlaceDetail() {
   );
 }
 
-/** 地図セクション。ref が null の間は絶対に初期化しない */
+/** 地図セクション。ref が null の間は初期化しない */
 function MapSection({ place }) {
   const mapRef = useRef(null);
   const [ready, setReady] = useState(false);
@@ -136,7 +139,6 @@ function MapSection({ place }) {
     let cancelled = false;
 
     (async () => {
-      // 座標が無い・DOMがまだ → 何もしない
       if (
         mapRef.current == null ||
         place?.latitude == null ||
@@ -163,7 +165,10 @@ function MapSection({ place }) {
           if (cancelled || mapRef.current == null) return;
 
           const map = new Map(mapRef.current, opts);
-          const pin = new PinElement({ glyph: (place.name || "").slice(0, 2).toUpperCase() });
+          const pin = new PinElement({
+            // glyph は非推奨なので glyphText を使用
+            glyphText: (place.name || "").slice(0, 2).toUpperCase(),
+          });
           new AdvancedMarkerElement({
             map,
             position: center,
@@ -191,7 +196,6 @@ function MapSection({ place }) {
       <div
         ref={mapRef}
         className="h-80 w-full rounded-2xl border"
-        // ref が null のときに new Map させないのが一番のポイント
       />
       {gmapsUrl && (
         <div className="text-right">
@@ -216,7 +220,9 @@ function MapSection({ place }) {
         </div>
       )}
       {!ready && (
-        <p className="text-sm text-gray-500">地図を読み込み中…（DOM が準備できてから初期化します）</p>
+        <p className="text-sm text-gray-500">
+          地図を読み込み中…（DOM が準備できてから初期化します）
+        </p>
       )}
     </section>
   );

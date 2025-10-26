@@ -1,14 +1,14 @@
 // src/pages/MyPage.jsx
 import { useEffect, useMemo, useState } from "react";
-import { api, getToken } from "../../lib/api"; // ← あなたの api ヘルパー（/src/lib/api.js）
+import { api, getToken } from "../../lib/api";
 import MyPlacesList from "../../使う、参考/components/forMypage/MyPlacesList";
 import MyPlacesGrid from "../../使う、参考/components/forMypage/MyPlacesGrid";
 import MyPlacesMap from "../../使う、参考/components/forMypage/MyPlacesMap";
 
-// JWT から username をフォールバック取得（api.js の保管キーに合わせる）
+// JWT から username をフォールバック取得
 function decodeUsernameFromJWT() {
   try {
-    const raw = getToken() || localStorage.getItem("token"); // ← api.js と同じキーを優先
+    const raw = getToken() || localStorage.getItem("token");
     if (!raw || !raw.includes(".")) return null;
     const [, payload] = raw.split(".");
     const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
@@ -39,13 +39,12 @@ export default function MyPage() {
         setLoading(true);
         setErr("");
 
-        // ① 現在ユーザー（/auth/me は { user: {...} } を返す）
+        // ① 現在ユーザー
         let me;
         try {
-          const res = await api("/auth/me"); // ← ルートに合わせて修正
+          const res = await api("/auth/me"); // { user: {...} } を想定
           me = res?.user;
-        } catch (_) {
-          // 401/404 などのときは JWT から拾う
+        } catch {
           const u = decodeUsernameFromJWT();
           if (u) me = { username: u };
         }
@@ -55,7 +54,7 @@ export default function MyPage() {
           setProfile({ username });
         }
 
-        // ② 自分の場所一覧（/places/mine）
+        // ② 自分の場所一覧
         const places = await api("/places/mine");
         setAll(Array.isArray(places) ? places : []);
       } catch (e) {
@@ -140,7 +139,9 @@ export default function MyPage() {
           <>
             {mode === "list" && <MyPlacesList items={filtered} />}
             {mode === "grid" && <MyPlacesGrid items={filtered} />}
-            {mode === "map" && <MyPlacesMap items={filtered} greedyScroll={false} />}
+            {mode === "map" && (
+              <MyPlacesMap items={filtered} greedyScroll={false} />
+            )}
           </>
         )}
       </section>

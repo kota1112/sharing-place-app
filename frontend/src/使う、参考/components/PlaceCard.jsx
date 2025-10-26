@@ -1,17 +1,24 @@
-// src/components/PlaceCard.jsx
+// src/使う、参考/components/PlaceCard.jsx
 export default function PlaceCard({ place, layout = "grid" }) {
   const img = place.first_photo_url || null;
 
+  const address =
+    place.full_address ||
+    place.address_line ||
+    [place.city, place.state, place.postal_code, place.country]
+      .filter(Boolean)
+      .join(" ") ||
+    "-";
+
+  const isList = layout === "list";
+
   return (
     <article
-      className={`${
-        layout === "list" ? "flex" : "block"
-      } rounded-2xl border border-gray-200 bg-white transition hover:shadow-sm`}
+      className={`${isList ? "flex" : "block"} rounded-2xl border border-gray-200 bg-white transition hover:shadow-sm`}
     >
+      {/* サムネイル */}
       <div
-        className={`${
-          layout === "list" ? "w-40 h-28" : "w-full h-48"
-        } relative overflow-hidden rounded-t-2xl bg-gray-100 ${layout === "list" ? "rounded-l-2xl rounded-tr-none" : ""}`}
+        className={`${isList ? "w-40 h-28 rounded-l-2xl rounded-tr-none" : "w-full h-48 rounded-t-2xl"} relative overflow-hidden bg-gray-100`}
       >
         {img ? (
           <img
@@ -31,14 +38,37 @@ export default function PlaceCard({ place, layout = "grid" }) {
         </span>
       </div>
 
-      <div className={`${layout === "list" ? "p-3" : "p-4"}`}>
-        <div className="truncate font-semibold">{place.name}</div>
-        <div className="text-sm text-gray-500">{place.city ?? "-"}</div>
+      {/* 本文 */}
+      <div className={`${isList ? "p-3 min-w-0 flex-1" : "p-4"}`}>
+        {/* タイトル */}
+        <div className="truncate font-semibold" title={place.name}>
+          {place.name}
+        </div>
+
+        {/* 住所 */}
+        <div className="text-sm text-gray-500 truncate" title={address}>
+          {address}
+        </div>
+
+        {/* 説明（2行に収めて省略。プラグイン不要の CSS） */}
         {place.description && (
-          <div className="mt-1 line-clamp-2 text-sm text-gray-700">
+          <div
+            className="mt-1 text-sm text-gray-700"
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              wordBreak: "break-word",
+              maxWidth: "100%",
+            }}
+            title={place.description}
+          >
             {place.description}
           </div>
         )}
+
+        {/* 以前のデザインに戻した「詳細を見る」 */}
         <a
           href={`/places/${place.id}`}
           className="mt-2 inline-block text-sm text-indigo-600 hover:underline"

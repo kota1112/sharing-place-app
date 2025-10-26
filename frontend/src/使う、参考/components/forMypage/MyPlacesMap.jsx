@@ -26,6 +26,7 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
     let cancelled = false;
     let map, meMarker, btnDiv, advanced = false;
     let spinnerDiv, toastDiv;
+    let info; // ← 使い回す InfoWindow
 
     (async () => {
       await ensureMaps();
@@ -64,7 +65,10 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
         map = new g.maps.Map(ref.current, mapOpts);
       }
 
-      // places マーカー
+      // InfoWindow を用意
+      info = new g.maps.InfoWindow();
+
+      // places マーカー（クリックで InfoWindow）
       const valid = items.filter(
         (p) =>
           p &&
@@ -73,6 +77,18 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
           !Number.isNaN(+p.latitude) &&
           !Number.isNaN(+p.longitude)
       );
+
+      const openInfo = (place, anchor) => {
+        if (!info) return;
+        info.setContent(buildInfoHtml(place));
+        // AdvancedMarker のときは {map, anchor} 指定、旧 Marker は (map, marker)
+        if (anchor && typeof anchor.addListener === "function") {
+          info.open({ map, anchor }); // AdvancedMarkerElement
+        } else {
+          info.open(map, anchor); // google.maps.Marker
+        }
+      };
+
       if (advanced) {
         const { AdvancedMarkerElement, PinElement } =
           await g.maps.importLibrary("marker");
@@ -81,17 +97,19 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
           const pin = new PinElement({
             glyphText: (p.name || "").slice(0, 2).toUpperCase(),
           });
-          new AdvancedMarkerElement({
+          const marker = new AdvancedMarkerElement({
             map,
             position,
             content: pin.element,
             title: p.name || "",
           });
+          marker.addListener("gmp-click", () => openInfo(p, marker));
         }
       } else {
         for (const p of valid) {
           const position = { lat: +p.latitude, lng: +p.longitude };
-          new g.maps.Marker({ map, position, title: p.name || "" });
+          const marker = new g.maps.Marker({ map, position, title: p.name || "" });
+          marker.addListener("click", () => openInfo(p, marker));
         }
       }
 
@@ -260,4 +278,107 @@ export default function MyPlacesMap({ items = [], greedyScroll = false }) {
       style={{ height: "420px", position: "relative" }}
     />
   );
+}
+
+/* ================= Utilities (MapView と共通の見た目) ================= */
+
+function buildMapsUrl(p) {
+  if (p.google_place_id) {
+    return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(
+      p.google_place_id
+    )}`;
+  }
+  const addr =
+    p.full_address ||
+    p.address_line ||
+    [p.city, p.state, p.postal_code, p.country].filter(Boolean).join(" ") ||
+    "";
+  const name = p.name || "";
+  const q = [name, addr].filter(Boolean).join(" ");
+  if (q.trim()) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      q
+    )}`;
+  }
+  if (p.latitude != null && p.longitude != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      `${p.latitude},${p.longitude}`
+    )}`;
+  }
+  return "https://www.google.com/maps";
+}
+
+/** サムネ小さめ + 右側に本文（先頭が無い場合は “No image”） */
+function buildInfoHtml(p) {
+  const thumb = p.first_photo_url
+    ? `<img src="${escapeHtml(p.first_photo_url)}" alt="${escapeHtml(
+        p.name || ""
+      )}" style="
+            width:72px;height:72px;border-radius:10px;object-fit:cover;
+            flex:none;display:block;
+        " />`
+    : `<div style="
+            width:72px;height:72px;border-radius:10px;background:#e5e7eb;
+            display:flex;align-items:center;justify-content:center;
+            color:#6b7280;font-size:12px;flex:none;
+        ">No image</div>`;
+
+  const name = p.name
+    ? `<div style="font-weight:700;font-size:14px;line-height:1.3;">
+         ${escapeHtml(p.name)}
+       </div>`
+    : "";
+
+  const addr =
+    p.full_address ||
+    p.address_line ||
+    [p.city, p.state, p.postal_code, p.country].filter(Boolean).join(" ") ||
+    "";
+  const addrHtml = addr
+    ? `<div style="font-size:12px;color:#374151;margin-top:2px;">
+         ${escapeHtml(addr)}
+       </div>`
+    : "";
+
+  const desc = (p.description || "").trim();
+  const descShort = desc.length > 60 ? `${desc.slice(0, 60)}…` : desc;
+  const descHtml = descShort
+    ? `<div style="font-size:12px;color:#111827;margin-top:6px;">
+         ${escapeHtml(descShort)}
+       </div>`
+    : "";
+
+  const mapsUrl = buildMapsUrl(p);
+
+  return `
+  <div style="width:260px;padding:12px 12px 10px;border-radius:14px;">
+    <div style="display:flex;gap:10px;">
+      ${thumb}
+      <div style="min-width:0;flex:1 1 auto;">
+        ${name}
+        ${addrHtml}
+        ${descHtml}
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <a href="/places/${p.id}" style="
+           text-decoration:none;background:#111827;color:#fff;
+           padding:8px 10px;border-radius:10px;font-size:12px;
+         ">詳細を見る</a>
+      <a href="${mapsUrl}" target="_blank" rel="noopener" style="
+           text-decoration:none;background:#e5e7eb;color:#111827;
+           padding:8px 10px;border-radius:10px;font-size:12px;
+         ">Google マップで見る</a>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }

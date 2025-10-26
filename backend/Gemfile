@@ -44,4 +44,22 @@ group :development, :test do
 
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
+
+  # ===== RSpec / FactoryBot =====
+  gem "rspec-rails"
+  gem "factory_bot_rails"
+
+  # ===== dotenv（追加：.env を dev/test で読み込む）=====
+  gem "dotenv-rails"
 end
+
+group :test do
+  # ===== テスト専用ユーティリティ =====
+  gem "faker"
+  # 任意：カバレッジ計測
+  gem "simplecov", require: false
+end
+
+gem "devise", "~> 4.9"
+gem "devise-jwt", "~> 0.12.1"
+gem "rack-cors", "~> 3.0"

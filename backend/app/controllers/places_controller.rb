@@ -7,8 +7,61 @@ class PlacesController < ApplicationController
 
   # GET /places
   # 公開：軽量フィールド + 先頭写真URL（なければ null）
+  # params:
+  #   q: 検索キーワード（任意）
   def index
-    places = Place.with_attached_photos.order(created_at: :desc).limit(50)
+    scope = Place.with_attached_photos.order(created_at: :desc)
+
+    q = params[:q].to_s.strip
+    if q.present?
+      adapter = ActiveRecord::Base.connection.adapter_name.downcase
+      is_pg   = adapter.include?("postgres")
+      is_sqlite = adapter.include?("sqlite")
+      # LIKE 演算子（PGのみ ILIKE を使用）
+      like_op = is_pg ? "ILIKE" : "LIKE"
+
+      # 比較値（PG 以外は LOWER(...) と合わせる）
+      pattern = is_pg ? "%#{q}%" : "%#{q.downcase}%"
+
+      # カラム式（PG 以外は LOWER を噛ませる）
+      name_col =  is_pg ? "places.name"        : "LOWER(places.name)"
+      city_col =  is_pg ? "places.city"        : "LOWER(places.city)"
+      desc_col =  is_pg ? "places.description" : "LOWER(places.description)"
+
+      # 住所の連結（DBごとに式を切り替え）
+      concat_sql =
+        if is_sqlite
+          # SQLite: || と COALESCE で連結、全体に LOWER
+          "LOWER(COALESCE(places.address_line,'') || ' ' || " \
+          "COALESCE(places.city,'') || ' ' || COALESCE(places.state,'') || ' ' || " \
+          "COALESCE(places.postal_code,'') || ' ' || COALESCE(places.country,''))"
+        elsif is_pg
+          # PostgreSQL: concat_ws（ILIKE なので LOWER 不要）
+          "concat_ws(' ', places.address_line, places.city, places.state, places.postal_code, places.country)"
+        else
+          # MySQL 等: CONCAT_WS + LOWER（照合次第だが LOWER 付けておく）
+          "LOWER(CONCAT_WS(' ', places.address_line, places.city, places.state, places.postal_code, places.country))"
+        end
+
+      where_sql = []
+      binds = []
+
+      where_sql << "#{name_col} #{like_op} ?"
+      binds     << pattern
+
+      where_sql << "#{city_col} #{like_op} ?"
+      binds     << pattern
+
+      where_sql << "#{desc_col} #{like_op} ?"
+      binds     << pattern
+
+      where_sql << "#{concat_sql} #{like_op} ?"
+      binds     << pattern
+
+      scope = scope.where(where_sql.join(" OR "), *binds)
+    end
+
+    places = scope.limit(50)
     render json: places.map { |p| place_index_json(p) }
   end
 
@@ -53,7 +106,9 @@ class PlacesController < ApplicationController
   # GET /places/mine
   # 自分が作成した Place の一覧（要JWT）
   def mine
-    places = Place.with_attached_photos.where(author_id: current_user.id).order(created_at: :desc)
+    places = Place.with_attached_photos
+                  .where(author_id: current_user.id)
+                  .order(created_at: :desc)
     render json: places.map { |p| place_index_json(p) }
   end
 
@@ -81,7 +136,7 @@ class PlacesController < ApplicationController
       latitude: place.latitude,
       longitude: place.longitude,
       first_photo_url: first_photo_abs_url(place),
-      # 追加フィールド
+      # 追加フィールド（フロントの検索/表示に使用）
       address_line: place.address_line,
       full_address: place.full_address,
       address: place.address

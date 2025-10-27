@@ -3,8 +3,12 @@ class Place < ApplicationRecord
   has_many_attached :photos
 
   validates :name, presence: true
-  validates :latitude,  numericality: { greater_than_or_equal_to: -90,  less_than_or_equal_to: 90 },  allow_nil: true
-  validates :longitude, numericality: { greater_than_or_equal_to: -180, less_than_or_equal_to: 180 }, allow_nil: true
+  validates :latitude,
+            numericality: { greater_than_or_equal_to: -90, less_than_or_equal_to: 90 },
+            allow_nil: true
+  validates :longitude,
+            numericality: { greater_than_or_equal_to: -180, less_than_or_equal_to: 180 },
+            allow_nil: true
 
   before_validation :geocode_if_needed
 
@@ -17,6 +21,23 @@ class Place < ApplicationRecord
   def address
     full_address
   end
+
+  # ===== 検索用 scope（サーバーサイド検索・簡易版）=====
+  scope :search_text, ->(q) {
+    if q.present?
+      like = "%#{ActiveRecord::Base.sanitize_sql_like(q)}%"
+      where(
+        <<~SQL.squish, q: like
+          places.name ILIKE :q
+          OR places.city ILIKE :q
+          OR places.description ILIKE :q
+          OR concat_ws(' ', places.address_line, places.city, places.state, places.postal_code, places.country) ILIKE :q
+        SQL
+      )
+    else
+      all
+    end
+  }
 
   private
 

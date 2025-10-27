@@ -1,9 +1,12 @@
 // src/pages/MyPage.jsx
+
 import { useEffect, useMemo, useState } from "react";
 import { api, getToken } from "../../lib/api";
 import MyPlacesList from "../../使う、参考/components/forMypage/MyPlacesList";
 import MyPlacesGrid from "../../使う、参考/components/forMypage/MyPlacesGrid";
 import MyPlacesMap from "../../使う、参考/components/forMypage/MyPlacesMap";
+import AppHeader from "../components/layout/AppHeader";
+import AppFooter from "../components/layout/AppFooter";
 
 // JWT から username をフォールバック取得
 function decodeUsernameFromJWT() {
@@ -85,10 +88,8 @@ export default function MyPage() {
           type="button"
           onClick={() => setMode(m)}
           className={
-            "px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-50 transition " +
-            (mode === m
-              ? "bg-gray-900 text-white border-gray-900 hover:bg-gray-800"
-              : "")
+            "rounded-lg border px-3 py-1.5 text-sm transition hover:bg-gray-50 " +
+            (mode === m ? "border-gray-900 bg-gray-900 text-white" : "")
           }
         >
           {m[0].toUpperCase() + m.slice(1)}
@@ -98,53 +99,53 @@ export default function MyPage() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold">My Page</h1>
-        <div className="text-gray-500">
-          Account: <span className="font-semibold">{profile.username}</span>
-        </div>
-      </header>
-
-      <div className="mb-4">
-        <form onSubmit={(e) => e.preventDefault()} className="flex gap-2">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="flex-1 rounded-xl border px-4 py-2 focus:outline-none focus:ring"
-            placeholder="例: 渋谷 / 大阪城 / 京都駅 など"
-          />
-          <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">
-            Search
-          </button>
-        </form>
-      </div>
-
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">場所リスト</h2>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-500">
-            {filtered.length} / {all.length}
+    <>
+      <AppHeader />
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-16">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold">My Page</h1>
+          <div className="text-gray-500">
+            Account: <span className="font-semibold">{profile.username}</span>
           </div>
-          {Toggle}
-        </div>
-      </div>
+        </header>
 
-      <section className="min-h-[280px]">
-        {loading && <p className="text-gray-500">読み込み中…</p>}
-        {!loading && err && (
-          <p className="text-red-600">読み込みエラー: {err}</p>
-        )}
-        {!loading && !err && (
-          <>
-            {mode === "list" && <MyPlacesList items={filtered} />}
-            {mode === "grid" && <MyPlacesGrid items={filtered} />}
-            {mode === "map" && (
-              <MyPlacesMap items={filtered} greedyScroll={false} />
-            )}
-          </>
-        )}
-      </section>
-    </div>
+        <div className="mb-4">
+          <form onSubmit={(e) => e.preventDefault()} className="flex gap-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="flex-1 rounded-xl border px-4 py-2 focus:outline-none focus:ring"
+              placeholder="例: 渋谷 / 大阪城 / 京都駅 など"
+            />
+            <button className="rounded-xl bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">
+              Search
+            </button>
+          </form>
+        </div>
+
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">場所リスト</h2>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-500">
+              {filtered.length} / {all.length}
+            </div>
+            {Toggle}
+          </div>
+        </div>
+
+        <section className="min-h-[280px]">
+          {loading && <p className="text-gray-500">読み込み中…</p>}
+          {!loading && err && <p className="text-red-600">読み込みエラー: {err}</p>}
+          {!loading && !err && (
+            <>
+              {mode === "list" && <MyPlacesList items={filtered} />}
+              {mode === "grid" && <MyPlacesGrid items={filtered} />}
+              {mode === "map" && <MyPlacesMap items={filtered} greedyScroll={false} />}
+            </>
+          )}
+        </section>
+      </div>
+      <AppFooter />
+    </>
   );
 }

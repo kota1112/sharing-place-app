@@ -1,8 +1,11 @@
 // src/pages/PlaceDetail.jsx
+
 // /* global google */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ensureMaps } from "../../lib/maps";
+import AppHeader from "../components/layout/AppHeader";
+import AppFooter from "../components/layout/AppFooter";
 
 const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
 
@@ -11,7 +14,6 @@ export default function PlaceDetail() {
   const [place, setPlace] = useState(null);
   const [err, setErr] = useState("");
 
-  // 取得
   useEffect(() => {
     let dead = false;
     (async () => {
@@ -36,93 +38,101 @@ export default function PlaceDetail() {
 
   if (err) {
     return (
-      <div className="mx-auto max-w-5xl p-6">
-        <pre className="whitespace-pre-wrap rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {err}
-        </pre>
-        <Link to="/place-homepage" className="mt-4 inline-block text-blue-600 hover:underline">
-          ← Back
-        </Link>
-      </div>
+      <>
+        <AppHeader />
+        <div className="mx-auto max-w-5xl px-4 pb-20 pt-16">
+          <pre className="whitespace-pre-wrap rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {err}
+          </pre>
+          <Link
+            to="/place-homepage"
+            className="mt-4 inline-block text-blue-600 hover:underline"
+          >
+            ← Back
+          </Link>
+        </div>
+        <AppFooter />
+      </>
     );
   }
 
   if (!place) {
     return (
-      <div className="mx-auto max-w-5xl p-6">
-        <div className="h-6 w-32 animate-pulse rounded bg-gray-200" />
-        <div className="mt-4 h-72 w-full animate-pulse rounded-2xl bg-gray-200" />
-      </div>
+      <>
+        <AppHeader />
+        <div className="mx-auto max-w-5xl px-4 pb-20 pt-16">
+          <div className="h-6 w-32 animate-pulse rounded bg-gray-200" />
+          <div className="mt-4 h-72 w-full animate-pulse rounded-2xl bg-gray-200" />
+        </div>
+        <AppFooter />
+      </>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6 space-y-8">
-      <Link to="/place-homepage" className="text-blue-600 hover:underline">
-        ← Back
-      </Link>
+    <>
+      <AppHeader />
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-16 space-y-8">
+        <Link to="/place-homepage" className="text-blue-600 hover:underline">
+          ← Back
+        </Link>
 
-      <h1 className="text-3xl font-semibold break-words">{place.name}</h1>
+        <h1 className="break-words text-3xl font-semibold">{place.name}</h1>
 
-      {/* Hero 画像 */}
-      {place.photo_urls?.[0] && (
-        <img
-          src={place.photo_urls[0]}
-          alt={place.name}
-          className="aspect-[16/6] w-full rounded-2xl object-cover"
-        />
-      )}
-
-      {/* アドレス・説明 */}
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h2 className="mb-2 text-lg font-medium">Address</h2>
-        <p className="break-words text-gray-700">
-          {place.full_address ||
-            [place.address_line, place.city, place.state, place.postal_code, place.country]
-              .filter(Boolean)
-              .join(" ")}
-        </p>
-        {place.description && (
-          <>
-            <div className="mt-4 h-px w-full bg-gray-100" />
-            {/* 長文でも横に膨らまないように：pre を保ちつつ単語途中で折り返し */}
-            <p className="mt-4 whitespace-pre-wrap break-words leading-relaxed text-gray-800">
-              {place.description}
-            </p>
-          </>
+        {place.photo_urls?.[0] && (
+          <img
+            src={place.photo_urls[0]}
+            alt={place.name}
+            className="aspect-[16/6] w-full rounded-2xl object-cover"
+          />
         )}
-      </section>
 
-      {/* 地図 */}
-      <MapSection place={place} />
-
-      {/* 写真一覧 */}
-      {place.photo_urls?.length > 1 && (
-        <section>
-          <h2 className="mb-3 text-lg font-medium">More photos</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {place.photo_urls.slice(1).map((url) => (
-              <img
-                key={url}
-                src={url}
-                className="aspect-[4/3] w-full rounded-xl object-cover"
-                alt=""
-                loading="lazy"
-              />
-            ))}
-          </div>
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <h2 className="mb-2 text-lg font-medium">Address</h2>
+          <p className="break-words text-gray-700">
+            {place.full_address ||
+              [place.address_line, place.city, place.state, place.postal_code, place.country]
+                .filter(Boolean)
+                .join(" ")}
+          </p>
+          {place.description && (
+            <>
+              <div className="mt-4 h-px w-full bg-gray-100" />
+              <p className="mt-4 whitespace-pre-wrap break-words leading-relaxed text-gray-800">
+                {place.description}
+              </p>
+            </>
+          )}
         </section>
-      )}
-    </div>
+
+        <MapSection place={place} />
+
+        {place.photo_urls?.length > 1 && (
+          <section>
+            <h2 className="mb-3 text-lg font-medium">More photos</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {place.photo_urls.slice(1).map((url) => (
+                <img
+                  key={url}
+                  src={url}
+                  className="aspect-[4/3] w-full rounded-xl object-cover"
+                  alt=""
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+      <AppFooter />
+    </>
   );
 }
 
-/** 地図セクション。ref が null の間は初期化しない */
 function MapSection({ place }) {
   const mapRef = useRef(null);
   const [ready, setReady] = useState(false);
 
-  // Google マップのリンク（座標優先、なければ住所）
   const gmapsUrl = useMemo(() => {
     if (place.latitude != null && place.longitude != null) {
       return `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`;
@@ -139,17 +149,11 @@ function MapSection({ place }) {
     let cancelled = false;
 
     (async () => {
-      if (
-        mapRef.current == null ||
-        place?.latitude == null ||
-        place?.longitude == null
-      ) {
-        return;
-      }
+      if (!mapRef.current || place?.latitude == null || place?.longitude == null) return;
 
       try {
         await ensureMaps();
-        if (cancelled || mapRef.current == null) return;
+        if (cancelled || !mapRef.current) return;
 
         const g = window.google;
         const canImport = typeof g.maps.importLibrary === "function";
@@ -162,11 +166,10 @@ function MapSection({ place }) {
             g.maps.importLibrary("maps"),
             g.maps.importLibrary("marker"),
           ]);
-          if (cancelled || mapRef.current == null) return;
+          if (cancelled || !mapRef.current) return;
 
           const map = new Map(mapRef.current, opts);
           const pin = new PinElement({
-            // glyph は非推奨なので glyphText を使用
             glyphText: (place.name || "").slice(0, 2).toUpperCase(),
           });
           new AdvancedMarkerElement({
@@ -193,10 +196,7 @@ function MapSection({ place }) {
 
   return (
     <section className="space-y-3">
-      <div
-        ref={mapRef}
-        className="h-80 w-full rounded-2xl border"
-      />
+      <div ref={mapRef} className="h-80 w-full rounded-2xl border" />
       {gmapsUrl && (
         <div className="text-right">
           <a
@@ -207,23 +207,13 @@ function MapSection({ place }) {
           >
             Google マップで開く
             <svg viewBox="0 0 24 24" className="h-4 w-4">
-              <path
-                d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z"
-                fill="currentColor"
-              />
-              <path
-                d="M5 5h6V3H3v8h2V5zm0 8H3v8h8v-2H5v-6z"
-                fill="currentColor"
-              />
+              <path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z" fill="currentColor" />
+              <path d="M5 5h6V3H3v8h2V5zm0 8H3v8h8v-2H5v-6z" fill="currentColor" />
             </svg>
           </a>
         </div>
       )}
-      {!ready && (
-        <p className="text-sm text-gray-500">
-          地図を読み込み中…（DOM が準備できてから初期化します）
-        </p>
-      )}
+      {!ready && <p className="text-sm text-gray-500">地図を読み込み中…</p>}
     </section>
   );
 }

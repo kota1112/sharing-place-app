@@ -22,11 +22,13 @@ Rails.application.routes.draw do
     end
 
     # --- Places ---
-    # Public: index/show
-    # Private: create/update/destroy/mine (controller側で authenticate_user!)
+    # Public: index/show/suggest
+    # Private: create/update/destroy/mine/suggest_mine（controller側で authenticate_user!）
     resources :places, only: [:index, :show, :create, :update, :destroy] do
       collection do
-        get :mine   # => PlacesController#mine
+        get :mine            # => PlacesController#mine
+        get :suggest         # => PlacesController#suggest        (公開)
+        get :suggest_mine    # => PlacesController#suggest_mine   (要JWT)
       end
     end
   end

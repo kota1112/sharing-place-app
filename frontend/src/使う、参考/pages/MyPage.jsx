@@ -1,14 +1,15 @@
 // src/pages/MyPage.jsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, getToken } from "../../lib/api";
+import AppHeader from "../components/layout/AppHeader";
+import AppFooter from "../components/layout/AppFooter";
+import SearchBar from "../components/SearchBar"; // ★ ホームと同じ検索バーを再利用
 import MyPlacesList from "../../使う、参考/components/forMypage/MyPlacesList";
 import MyPlacesGrid from "../../使う、参考/components/forMypage/MyPlacesGrid";
 import MyPlacesMap from "../../使う、参考/components/forMypage/MyPlacesMap";
-import AppHeader from "../components/layout/AppHeader";
-import AppFooter from "../components/layout/AppFooter";
 
-// JWT から username をフォールバック取得
+// JWT から username をフォールバック取得（既存ロジックを維持）
 function decodeUsernameFromJWT() {
   try {
     const raw = getToken() || localStorage.getItem("token");
@@ -28,21 +29,32 @@ function decodeUsernameFromJWT() {
   }
 }
 
+// 簡易デバウンス
+function useDebounce(value, ms) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
 export default function MyPage() {
   const [profile, setProfile] = useState({ username: "—" });
-  const [all, setAll] = useState([]);
-  const [q, setQ] = useState("");
-  const [mode, setMode] = useState("list");
+  const [items, setItems] = useState([]);          // サーバー検索の結果
+  const [q, setQ] = useState("");                  // 検索クエリ
+  const debouncedQ = useDebounce(q, 300);          // 300ms デバウンス
+  const [mode, setMode] = useState("list");        // "list" | "grid" | "map"
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  // 初回：プロフィール取得（既存仕様そのまま）
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         setErr("");
 
-        // ① 現在ユーザー
         let me;
         try {
           const res = await api("/auth/me"); // { user: {...} } を想定
@@ -56,10 +68,6 @@ export default function MyPage() {
             me.username || me.display_name || me.email || me.id || "—";
           setProfile({ username });
         }
-
-        // ② 自分の場所一覧
-        const places = await api("/places/mine");
-        setAll(Array.isArray(places) ? places : []);
       } catch (e) {
         setErr(e.message || String(e));
       } finally {
@@ -68,17 +76,25 @@ export default function MyPage() {
     })();
   }, []);
 
-  const filtered = useMemo(() => {
-    const v = q.trim().toLowerCase();
-    if (!v) return all;
-    return all.filter((p) =>
-      [p.name, p.full_address, p.address_line, p.city, p.description]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(v)
-    );
-  }, [all, q]);
+  // q のたびにサーバー側検索（/places/mine?q=...）
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr("");
+        const v = debouncedQ.trim();
+        const url = v ? `/places/mine?q=${encodeURIComponent(v)}` : "/places/mine";
+        const data = await api(url); // 認証ヘッダ付与は api() 側に委譲
+        if (!aborted) setItems(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!aborted) setErr(e.message || String(e));
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    })();
+    return () => { aborted = true; };
+  }, [debouncedQ]);
 
   const Toggle = (
     <div className="flex gap-2">
@@ -104,31 +120,24 @@ export default function MyPage() {
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-16">
         <header className="mb-8">
           <h1 className="text-3xl font-bold">My Page</h1>
-          <div className="text-gray-500">
+        <div className="text-gray-500">
             Account: <span className="font-semibold">{profile.username}</span>
           </div>
         </header>
 
+        {/* ★ SearchBar をそのまま再利用（value/onChange/placeholder だけでOK） */}
         <div className="mb-4">
-          <form onSubmit={(e) => e.preventDefault()} className="flex gap-2">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="flex-1 rounded-xl border px-4 py-2 focus:outline-none focus:ring"
-              placeholder="例: 渋谷 / 大阪城 / 京都駅 など"
-            />
-            <button className="rounded-xl bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">
-              Search
-            </button>
-          </form>
+          <SearchBar
+            value={q}
+            onChange={setQ}
+            placeholder="自分の登録から検索…（例: 渋谷 / 大阪城 / 京都駅）"
+          />
         </div>
 
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">場所リスト</h2>
           <div className="flex items-center gap-4">
-            <div className="text-sm text-gray-500">
-              {filtered.length} / {all.length}
-            </div>
+            <div className="text-sm text-gray-500">{items.length}</div>
             {Toggle}
           </div>
         </div>
@@ -138,9 +147,9 @@ export default function MyPage() {
           {!loading && err && <p className="text-red-600">読み込みエラー: {err}</p>}
           {!loading && !err && (
             <>
-              {mode === "list" && <MyPlacesList items={filtered} />}
-              {mode === "grid" && <MyPlacesGrid items={filtered} />}
-              {mode === "map" && <MyPlacesMap items={filtered} greedyScroll={false} />}
+              {mode === "list" && <MyPlacesList items={items} />}
+              {mode === "grid" && <MyPlacesGrid items={items} />}
+              {mode === "map" && <MyPlacesMap items={items} greedyScroll={false} />}
             </>
           )}
         </section>

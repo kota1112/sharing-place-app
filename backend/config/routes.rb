@@ -1,32 +1,33 @@
 # config/routes.rb
 Rails.application.routes.draw do
-  # ===== 認証（Devise + JWT）: すべて JSON 想定 =====
-  scope :auth do
-    devise_for :users,
-      path: '',
-      defaults: { format: :json },
-      controllers: {
-        sessions: 'users/sessions',
-        registrations: 'users/registrations'
-      }
+  # ===== Health check (for uptime monitors) =====
+  get 'up', to: 'rails/health#show', as: :rails_health_check
 
-    # 現在のユーザー情報（JWT 必須）
-    devise_scope :user do
-      get 'me', to: 'users/sessions#me', defaults: { format: :json }
+  # ===== API (JSON only) =====
+  scope defaults: { format: :json } do
+    # --- Auth (Devise + JWT) ---
+    scope :auth do
+      devise_for :users,
+        path: '',
+        defaults: { format: :json },
+        controllers: {
+          sessions: 'users/sessions',
+          registrations: 'users/registrations'
+        }
+
+      # Current user (requires JWT)
+      devise_scope :user do
+        get 'me', to: 'users/sessions#me'
+      end
+    end
+
+    # --- Places ---
+    # Public: index/show
+    # Private: create/update/destroy/mine (controller側で authenticate_user!)
+    resources :places, only: [:index, :show, :create, :update, :destroy] do
+      collection do
+        get :mine   # => PlacesController#mine
+      end
     end
   end
-
-  # ===== Places =====
-  # 常に JSON を返す。自分の Place 一覧は /places/mine
-  resources :places, defaults: { format: :json } do
-    collection do
-      get :mine  # => PlacesController#mine（要: authenticate_user!）
-    end
-  end
-
-  # （旧）/me は混乱防止のため削除推奨
-  # get 'me', to: 'profiles#me'
-
-  # ヘルスチェック
-  get 'up' => 'rails/health#show', as: :rails_health_check
 end

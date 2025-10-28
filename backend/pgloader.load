@@ -1,0 +1,14 @@
+load database
+    from sqlite:///$(pwd)/storage/development.sqlite3
+    into postgresql://ishikawakota@127.0.0.1:5432/sharing_place_app_development
+
+with
+    include drop tables    = no,
+    create tables          = no,        -- 既に Rails で作った schema を使う
+    include create indexes = no,
+    reset sequences        = yes,       -- id のシーケンスを MAX(id) に合わせる
+    data only              = yes,       -- スキーマは作らない
+    batch size             = 1000;
+
+-- もし一部の内部テーブルを除外したい場合は including で指定:
+-- including only table names matching ~/^(users|places|active_storage_blobs|active_storage_attachments|active_storage_variant_records)$/;

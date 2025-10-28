@@ -1,64 +1,63 @@
+# app/controllers/places_controller.rb
 class PlacesController < ApplicationController
   include Rails.application.routes.url_helpers
 
-  # index / show は公開。それ以外は JWT 必須
   before_action :authenticate_user!, except: %i[index show]
   before_action :set_place, only: %i[show update destroy]
 
   # GET /places
-  # 公開：軽量フィールド + 先頭写真URL（なければ null）
-  # params:
-  #   q: 検索キーワード（任意）
   def index
     scope = Place.with_attached_photos.order(created_at: :desc)
 
     q = params[:q].to_s.strip
     if q.present?
-      adapter = ActiveRecord::Base.connection.adapter_name.downcase
-      is_pg   = adapter.include?("postgres")
-      is_sqlite = adapter.include?("sqlite")
-      # LIKE 演算子（PGのみ ILIKE を使用）
-      like_op = is_pg ? "ILIKE" : "LIKE"
+      adapter   = ActiveRecord::Base.connection.adapter_name.downcase
+      is_pg     = adapter.include?('postgres')
+      is_sqlite = adapter.include?('sqlite')
 
-      # 比較値（PG 以外は LOWER(...) と合わせる）
-      pattern = is_pg ? "%#{q}%" : "%#{q.downcase}%"
+      if is_pg
+        # PostgreSQL: ILIKE + pg_trgm similarity で並び替え
+        pattern = "%#{q}%"
+        concat_sql = "concat_ws(' ', places.address_line, places.city, places.state, places.postal_code, places.country)"
 
-      # カラム式（PG 以外は LOWER を噛ませる）
-      name_col =  is_pg ? "places.name"        : "LOWER(places.name)"
-      city_col =  is_pg ? "places.city"        : "LOWER(places.city)"
-      desc_col =  is_pg ? "places.description" : "LOWER(places.description)"
+        where_sql = <<~SQL.squish
+          places.name ILIKE :p OR
+          places.city ILIKE :p OR
+          places.description ILIKE :p OR
+          #{concat_sql} ILIKE :p
+        SQL
 
-      # 住所の連結（DBごとに式を切り替え）
-      concat_sql =
-        if is_sqlite
-          # SQLite: || と COALESCE で連結、全体に LOWER
-          "LOWER(COALESCE(places.address_line,'') || ' ' || " \
-          "COALESCE(places.city,'') || ' ' || COALESCE(places.state,'') || ' ' || " \
-          "COALESCE(places.postal_code,'') || ' ' || COALESCE(places.country,''))"
-        elsif is_pg
-          # PostgreSQL: concat_ws（ILIKE なので LOWER 不要）
-          "concat_ws(' ', places.address_line, places.city, places.state, places.postal_code, places.country)"
-        else
-          # MySQL 等: CONCAT_WS + LOWER（照合次第だが LOWER 付けておく）
-          "LOWER(CONCAT_WS(' ', places.address_line, places.city, places.state, places.postal_code, places.country))"
-        end
+        scope = scope.where(where_sql, p: pattern)
+        # 類似度で並べる（pg_trgm）
+        # similarity() は拡張が有効なら使用可能
+        scope = scope.reorder(
+          Arel.sql("GREATEST(similarity(places.name, :q), similarity(places.city, :q), similarity(places.description, :q)) DESC, places.created_at DESC")
+        ).bind_values([[nil, q]])
+      else
+        # SQLite/MySQL等：LOWER + LIKE でフォールバック
+        like_op   = 'LIKE'
+        pattern   = "%#{q.downcase}%"
+        name_col  = "LOWER(places.name)"
+        city_col  = "LOWER(places.city)"
+        desc_col  = "LOWER(places.description)"
 
-      where_sql = []
-      binds = []
+        concat_sql =
+          if is_sqlite
+            "LOWER(COALESCE(places.address_line,'') || ' ' || COALESCE(places.city,'') || ' ' || COALESCE(places.state,'') || ' ' || COALESCE(places.postal_code,'') || ' ' || COALESCE(places.country,''))"
+          else
+            "LOWER(CONCAT_WS(' ', places.address_line, places.city, places.state, places.postal_code, places.country))"
+          end
 
-      where_sql << "#{name_col} #{like_op} ?"
-      binds     << pattern
+        where_sql = []
+        binds = []
 
-      where_sql << "#{city_col} #{like_op} ?"
-      binds     << pattern
+        where_sql << "#{name_col} #{like_op} ?";  binds << pattern
+        where_sql << "#{city_col} #{like_op} ?";  binds << pattern
+        where_sql << "#{desc_col} #{like_op} ?";  binds << pattern
+        where_sql << "#{concat_sql} #{like_op} ?"; binds << pattern
 
-      where_sql << "#{desc_col} #{like_op} ?"
-      binds     << pattern
-
-      where_sql << "#{concat_sql} #{like_op} ?"
-      binds     << pattern
-
-      scope = scope.where(where_sql.join(" OR "), *binds)
+        scope = scope.where(where_sql.join(' OR '), *binds)
+      end
     end
 
     places = scope.limit(50)
@@ -66,13 +65,11 @@ class PlacesController < ApplicationController
   end
 
   # GET /places/:id
-  # 公開：住所/連絡先/写真URLまで返す
   def show
     render json: place_show_json(@place)
   end
 
   # POST /places
-  # 要JWT：オーナーは current_user
   def create
     place = Place.new(place_params.merge(author: current_user))
     if place.save
@@ -84,7 +81,6 @@ class PlacesController < ApplicationController
   end
 
   # PATCH/PUT /places/:id
-  # 要JWT：オーナー or admin のみ
   def update
     authorize_owner!(@place)
     if @place.update(place_params)
@@ -96,7 +92,6 @@ class PlacesController < ApplicationController
   end
 
   # DELETE /places/:id
-  # 要JWT：オーナー or admin のみ
   def destroy
     authorize_owner!(@place)
     @place.destroy!
@@ -104,7 +99,6 @@ class PlacesController < ApplicationController
   end
 
   # GET /places/mine
-  # 自分が作成した Place の一覧（要JWT）
   def mine
     places = Place.with_attached_photos
                   .where(author_id: current_user.id)
@@ -118,7 +112,6 @@ class PlacesController < ApplicationController
     @place = Place.find(params[:id])
   end
 
-  # 作成/更新で受け付ける項目
   def place_params
     params.require(:place).permit(
       :name, :description, :address_line, :city, :state, :postal_code, :country,
@@ -126,7 +119,6 @@ class PlacesController < ApplicationController
     )
   end
 
-  # index / mine 用（軽量 + 先頭写真URL）
   def place_index_json(place)
     {
       id: place.id,
@@ -136,14 +128,12 @@ class PlacesController < ApplicationController
       latitude: place.latitude,
       longitude: place.longitude,
       first_photo_url: first_photo_abs_url(place),
-      # 追加フィールド（フロントの検索/表示に使用）
       address_line: place.address_line,
       full_address: place.full_address,
       address: place.address
     }
   end
 
-  # show 用（詳細 + 写真URL配列）
   def place_show_json(place)
     {
       id: place.id,
@@ -164,24 +154,18 @@ class PlacesController < ApplicationController
     }
   end
 
-  # 先頭写真の絶対URL（なければ nil）
   def first_photo_abs_url(place)
     return nil unless place.photos.attached?
     rails_blob_url(place.photos.first, host: request.base_url)
   end
 
-  # multipart/form-data の photos[] を受け取って添付
   def attach_photos(record)
     return unless params[:photos].present?
-    Array(params[:photos]).each do |file|
-      record.photos.attach(file)
-    end
+    Array(params[:photos]).each { |file| record.photos.attach(file) }
   end
 
-  # オーナー or admin チェック
   def authorize_owner!(place)
-    allowed = current_user &&
-      (place.author_id == current_user.id || current_user.role == 'admin')
+    allowed = current_user && (place.author_id == current_user.id || current_user.role == 'admin')
     head :forbidden unless allowed
   end
 end

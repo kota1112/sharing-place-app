@@ -5,11 +5,16 @@
 
 # Read more: https://github.com/cyu/rack-cors
 
+# config/initializers/cors.rb
+# フロント（Viteなど）からのAPIアクセスを、開発用オリジンに限定
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
-    allow do
-      origins '*' # 開発のみ。本番は frontend ドメインに限定
-      resource '*', headers: :any, expose: ['Authorization'],
-        methods: %i[get post put patch delete options head]
-    end
+  allow do
+    # 開発フロントのオリジンだけ許可
+    origins 'http://localhost:5173', 'http://127.0.0.1:5173'
+    resource '*',
+      headers: :any,
+      expose: %w[Authorization],
+      methods: %i[get post put patch delete options head],
+      max_age: 3600
   end
-  
+end

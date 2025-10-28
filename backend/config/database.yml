@@ -1,41 +1,45 @@
-# SQLite. Versions 3.8.0 and up are supported.
-#   gem install sqlite3
-#
-#   Ensure the SQLite 3 gem is defined in your Gemfile
-#   gem "sqlite3"
-#
+# config/database.yml
+# PostgreSQL（Postgres.app / Homebrew / EnterpriseDB いずれでもOK）
 default: &default
-  adapter: sqlite3
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  timeout: 5000
+  adapter: postgresql
+  encoding: unicode
+  # ENVが未設定でも落ちないように fetch のブロック形式に統一
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 10 } %>
+
+  # 優先度: PGUSER → USER → "postgres"
+  username: <%= ENV.fetch("PGUSER") { ENV.fetch("USER") { "postgres" } } %>
+
+  # Postgres.app は host/port 省略（UNIXソケット）で接続可。
+  # Homebrew/EDB などTCPで繋ぐときは環境変数で上書き。
+  host: <%= ENV["PGHOST"] %>  # 例: "127.0.0.1"
+  port: <%= ENV["PGPORT"] %>  # 例: "5432" / "5433" / "5434"
+
+  # パスワードが必要な環境（EDBなど）は PGPASSWORD を設定して使う
+  password: <%= ENV["PGPASSWORD"] %>
 
 development:
   <<: *default
-  database: storage/development.sqlite3
+  database: sharing_place_app_development
 
-# Warning: The database defined as "test" will be erased and
-# re-generated from your development database when you run "rake".
-# Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: storage/test.sqlite3
+  database: sharing_place_app_test
 
-
-# Store production database in the storage/ directory, which by default
-# is mounted as a persistent Docker volume in config/deploy.yml.
+# 本番：multi-DB（primary/cache/queue/cable）を踏襲。
+# 使っていない場合は primary だけ残してOK。
 production:
   primary:
     <<: *default
-    database: storage/production.sqlite3
+    database: <%= ENV.fetch("PGDATABASE") { "sharing_place_app_production" } %>
   cache:
     <<: *default
-    database: storage/production_cache.sqlite3
+    database: <%= ENV.fetch("PGCACHE_DATABASE") { "sharing_place_app_production_cache" } %>
     migrations_paths: db/cache_migrate
   queue:
     <<: *default
-    database: storage/production_queue.sqlite3
+    database: <%= ENV.fetch("PGQUEUE_DATABASE") { "sharing_place_app_production_queue" } %>
     migrations_paths: db/queue_migrate
   cable:
     <<: *default
-    database: storage/production_cable.sqlite3
+    database: <%= ENV.fetch("PGCABLE_DATABASE") { "sharing_place_app_production_cable" } %>
     migrations_paths: db/cable_migrate

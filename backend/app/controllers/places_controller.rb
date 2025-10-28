@@ -1,25 +1,26 @@
+# app/controllers/places_controller.rb
 class PlacesController < ApplicationController
   include Rails.application.routes.url_helpers
 
-  # index / show は公開。それ以外は JWT 必須
   before_action :authenticate_user!, except: %i[index show]
   before_action :set_place, only: %i[show update destroy]
 
   # GET /places
-  # 公開：軽量フィールド + 先頭写真URL（なければ null）
+  # 公開: q（キーワード）対応
   def index
-    places = Place.with_attached_photos.order(created_at: :desc).limit(50)
+    scope = Place.with_attached_photos.order(created_at: :desc)
+    q = params[:q].to_s.strip
+    scope = apply_text_search(scope, q) if q.present?
+    places = scope.limit(50)
     render json: places.map { |p| place_index_json(p) }
   end
 
   # GET /places/:id
-  # 公開：住所/連絡先/写真URLまで返す
   def show
     render json: place_show_json(@place)
   end
 
   # POST /places
-  # 要JWT：オーナーは current_user
   def create
     place = Place.new(place_params.merge(author: current_user))
     if place.save
@@ -31,7 +32,6 @@ class PlacesController < ApplicationController
   end
 
   # PATCH/PUT /places/:id
-  # 要JWT：オーナー or admin のみ
   def update
     authorize_owner!(@place)
     if @place.update(place_params)
@@ -43,7 +43,6 @@ class PlacesController < ApplicationController
   end
 
   # DELETE /places/:id
-  # 要JWT：オーナー or admin のみ
   def destroy
     authorize_owner!(@place)
     @place.destroy!
@@ -51,9 +50,14 @@ class PlacesController < ApplicationController
   end
 
   # GET /places/mine
-  # 自分が作成した Place の一覧（要JWT）
+  # 要JWT: 自分の Place + q（キーワード）対応
   def mine
-    places = Place.with_attached_photos.where(author_id: current_user.id).order(created_at: :desc)
+    scope = Place.with_attached_photos
+                 .where(author_id: current_user.id)
+                 .order(created_at: :desc)
+    q = params[:q].to_s.strip
+    scope = apply_text_search(scope, q) if q.present?
+    places = scope.limit(50)
     render json: places.map { |p| place_index_json(p) }
   end
 
@@ -63,7 +67,6 @@ class PlacesController < ApplicationController
     @place = Place.find(params[:id])
   end
 
-  # 作成/更新で受け付ける項目
   def place_params
     params.require(:place).permit(
       :name, :description, :address_line, :city, :state, :postal_code, :country,
@@ -81,7 +84,6 @@ class PlacesController < ApplicationController
       latitude: place.latitude,
       longitude: place.longitude,
       first_photo_url: first_photo_abs_url(place),
-      # 追加フィールド
       address_line: place.address_line,
       full_address: place.full_address,
       address: place.address
@@ -118,15 +120,89 @@ class PlacesController < ApplicationController
   # multipart/form-data の photos[] を受け取って添付
   def attach_photos(record)
     return unless params[:photos].present?
-    Array(params[:photos]).each do |file|
-      record.photos.attach(file)
-    end
+    Array(params[:photos]).each { |file| record.photos.attach(file) }
   end
 
   # オーナー or admin チェック
   def authorize_owner!(place)
-    allowed = current_user &&
-      (place.author_id == current_user.id || current_user.role == 'admin')
+    allowed = current_user && (place.author_id == current_user.id || current_user.role == 'admin')
     head :forbidden unless allowed
+  end
+
+  # ===== 共通: テキスト検索（PostgreSQL最適化／他DBフォールバック） =====
+  def apply_text_search(scope, q)
+    adapter   = ActiveRecord::Base.connection.adapter_name.downcase
+    is_pg     = adapter.include?('postgres')
+    is_sqlite = adapter.include?('sqlite')
+
+    if is_pg
+      # full_address_cached がスキーマに存在すれば優先利用（関数インデックス不要で高速）
+      has_cached = Place.column_names.include?('full_address_cached')
+      address_expr = has_cached ? 'places.full_address_cached' :
+                                  "concat_ws(' ', places.address_line, places.city, places.state, places.postal_code, places.country)"
+
+      safe    = ActiveRecord::Base.sanitize_sql_like(q)
+      pattern = "%#{safe}%"
+
+      where_sql = <<~SQL.squish
+        places.name ILIKE :p
+        OR places.city ILIKE :p
+        OR places.description ILIKE :p
+        OR #{address_expr} ILIKE :p
+      SQL
+      scope = scope.where(where_sql, p: pattern)
+
+      # 類似度で並べ替え（pg_trgm）
+      order_sql = if has_cached
+        ActiveRecord::Base.send(
+          :sanitize_sql_array,
+          [
+            "GREATEST(similarity(places.name, ?),
+                      similarity(places.city, ?),
+                      similarity(places.description, ?),
+                      similarity(places.full_address_cached, ?)) DESC,
+                      places.created_at DESC",
+            q, q, q, q
+          ]
+        )
+      else
+        ActiveRecord::Base.send(
+          :sanitize_sql_array,
+          [
+            "GREATEST(similarity(places.name, ?),
+                      similarity(places.city, ?),
+                      similarity(places.description, ?)) DESC,
+                      places.created_at DESC",
+            q, q, q
+          ]
+        )
+      end
+
+      scope.reorder(Arel.sql(order_sql))
+    else
+      # SQLite/MySQL 等: LOWER + LIKE
+      safe    = ActiveRecord::Base.sanitize_sql_like(q.downcase)
+      pattern = "%#{safe}%"
+      like_op = 'LIKE'
+      name_col = "LOWER(places.name)"
+      city_col = "LOWER(places.city)"
+      desc_col = "LOWER(places.description)"
+
+      concat_sql =
+        if is_sqlite
+          "LOWER(COALESCE(places.address_line,'') || ' ' || COALESCE(places.city,'') || ' ' || COALESCE(places.state,'') || ' ' || COALESCE(places.postal_code,'') || ' ' || COALESCE(places.country,''))"
+        else
+          "LOWER(CONCAT_WS(' ', places.address_line, places.city, places.state, places.postal_code, places.country))"
+        end
+
+      where_sql = []
+      binds = []
+      where_sql << "#{name_col} #{like_op} ?";  binds << pattern
+      where_sql << "#{city_col} #{like_op} ?";  binds << pattern
+      where_sql << "#{desc_col} #{like_op} ?";  binds << pattern
+      where_sql << "#{concat_sql} #{like_op} ?"; binds << pattern
+
+      scope.where(where_sql.join(' OR '), *binds)
+    end
   end
 end

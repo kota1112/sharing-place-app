@@ -1,37 +1,73 @@
-import { useEffect, useMemo, useState } from "react";
+// src/pages/PlacesHomepage.jsx
+import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import SearchBar from "../components/SearchBar";
 import PlacesMain from "../components/PlacesMain";
 import AppHeader from "../components/layout/AppHeader";
 import AppFooter from "../components/layout/AppFooter";
 
+// --- 簡易デバウンス（マイページと同じ実装）---
+function useDebounce(value, ms) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
 export default function PlacesHomepage() {
   const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(null); // API が total を返す場合に表示
   const [q, setQ] = useState("");
+  const debouncedQ = useDebounce(q, 300);   // ★ 入力から300ms後に検索
   const [mode, setMode] = useState("grid"); // 'list' | 'grid' | 'map'
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  // debouncedQ が変わるたびに /places?q=... をフェッチ
   useEffect(() => {
-    const ac = new AbortController();
-    setLoading(true);
-    setErr("");
-    api("/places", { signal: ac.signal })
-      .then((data) => setItems(Array.isArray(data) ? data : []))
-      .catch((e) => setErr(String(e?.message || e)))
-      .finally(() => setLoading(false));
-    return () => ac.abort();
-  }, []);
+    let aborted = false;
 
-  const filtered = useMemo(() => {
-    const n = q.trim().toLowerCase();
-    if (!n) return items;
-    return items.filter((p) =>
-      `${p.name ?? ""} ${p.city ?? ""} ${p.description ?? ""}`
-        .toLowerCase()
-        .includes(n)
-    );
-  }, [items, q]);
+    async function fetchPlaces(query) {
+      try {
+        setLoading(true);
+        setErr("");
+
+        const params = new URLSearchParams();
+        const trimmed = String(query || "").trim();
+        if (trimmed) params.set("q", trimmed);
+
+        // ページングを入れるならここで page / per_page を追加
+        const path = params.toString() ? `/places?${params.toString()}` : "/places";
+        const data = await api(path);
+
+        if (aborted) return;
+
+        if (Array.isArray(data)) {
+          setItems(data);
+          setTotal(null);
+        } else if (data && Array.isArray(data.items)) {
+          setItems(data.items);
+          setTotal(typeof data.total === "number" ? data.total : null);
+        } else {
+          setItems([]);
+          setTotal(null);
+        }
+      } catch (e) {
+        if (!aborted) {
+          setErr(String(e?.message || e));
+          setItems([]);
+          setTotal(null);
+        }
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    }
+
+    fetchPlaces(debouncedQ);
+    return () => { aborted = true; };
+  }, [debouncedQ]);
 
   return (
     <>
@@ -40,7 +76,8 @@ export default function PlacesHomepage() {
         <h1 className="mb-4 text-2xl font-bold">Places_homepage</h1>
 
         <div className="mb-4 flex items-center gap-3">
-          <SearchBar value={q} onChange={setQ} onSubmit={() => {}} />
+          {/* ★ ホームでもリアルタイム入力 → デバウンスでサーバ検索 */}
+          <SearchBar value={q} onChange={setQ} placeholder="場所名・都市・住所などで検索…" />
           <div className="ml-auto flex gap-1 rounded-xl bg-gray-100 p-1">
             {["list", "grid", "map"].map((m) => (
               <button
@@ -57,17 +94,24 @@ export default function PlacesHomepage() {
         </div>
 
         {loading && <div className="text-gray-500">Loading...</div>}
-        {!!err && (
+
+        {!!err && !loading && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {err}
           </div>
         )}
-        {!loading && !err && filtered.length === 0 && (
+
+        {!loading && !err && items.length === 0 && (
           <div className="text-gray-500">該当する場所がありません。</div>
         )}
 
-        {!loading && !err && filtered.length > 0 && (
-          <PlacesMain mode={mode} items={filtered} />
+        {!loading && !err && items.length > 0 && (
+          <>
+            {typeof total === "number" && (
+              <div className="mb-2 text-sm text-gray-500">{total} 件</div>
+            )}
+            <PlacesMain mode={mode} items={items} />
+          </>
         )}
       </main>
       <AppFooter />

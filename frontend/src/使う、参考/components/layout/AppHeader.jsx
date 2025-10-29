@@ -1,5 +1,50 @@
-// src/components/layout/AppHeader.jsx
+import { useEffect, useState, useCallback } from "react";
+import { getToken, clearToken } from "../../../lib/api";
+
 export default function AppHeader() {
+  const [authed, setAuthed] = useState(
+    !!(getToken() || localStorage.getItem("token"))
+  );
+  const tokenKey = "token";
+
+  // ローカル/別タブの変更やアプリ内イベントで反映
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (!e || e.key === null || e.key === tokenKey) {
+        setAuthed(!!(getToken() || localStorage.getItem(tokenKey)));
+      }
+    };
+    const onAuthChanged = () =>
+      setAuthed(!!(getToken() || localStorage.getItem(tokenKey)));
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("auth:changed", onAuthChanged);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("auth:changed", onAuthChanged);
+    };
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    const token = getToken() || localStorage.getItem(tokenKey);
+    try {
+      if (token) {
+        await fetch(import.meta.env.VITE_API_BASE + "/auth/sign_out", {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {}); // 失敗しても続行（トークンは破棄）
+      }
+    } finally {
+      clearToken?.(); // lib/api の clearToken を優先
+      localStorage.removeItem(tokenKey);
+      setAuthed(false);
+      // 他コンポーネントへ通知（ヘッダー/フッターの状態更新）
+      window.dispatchEvent(new Event("auth:changed"));
+      // ホームへ
+      location.assign("/place-homepage");
+    }
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/20 bg-blue-400/90 backdrop-blur supports-[backdrop-filter]:bg-blue-400/70">
       <nav
@@ -25,14 +70,19 @@ export default function AppHeader() {
                 Home
               </a>
             </li>
-            <li>
-              <a
-                href="/place/new"
-                className="rounded px-1 py-0.5 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-              >
-                Post
-              </a>
-            </li>
+
+            {/* Post はログイン時のみ表示 */}
+            {authed && (
+              <li>
+                <a
+                  href="/place/new"
+                  className="rounded px-1 py-0.5 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                >
+                  Post
+                </a>
+              </li>
+            )}
+
             <li>
               <a
                 href="/mypage"
@@ -46,14 +96,23 @@ export default function AppHeader() {
           {/* spacer to push auth to the right */}
           <div className="ml-auto" />
 
-          {/* Auth (ダミー) */}
+          {/* Auth */}
           <div className="flex items-center gap-3 text-sm sm:text-base">
-            <a
-              href="/login"
-              className="rounded px-1 py-0.5 text-white/90 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              Log in
-            </a>
+            {authed ? (
+              <button
+                onClick={handleLogout}
+                className="rounded px-1 py-0.5 text-white/90 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              >
+                Log out
+              </button>
+            ) : (
+              <a
+                href="/login"
+                className="rounded px-1 py-0.5 text-white/90 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              >
+                Log in
+              </a>
+            )}
           </div>
         </div>
       </nav>

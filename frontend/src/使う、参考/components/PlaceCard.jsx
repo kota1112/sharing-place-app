@@ -1,5 +1,14 @@
-// src/使う、参考/components/PlaceCard.jsx
-export default function PlaceCard({ place, layout = "grid" }) {
+// src/components/PlaceCard.jsx
+// 使い方:
+// <PlaceCard place={p} layout="grid" onEdit={(id)=>...} onDelete={(id)=>...} />
+
+export default function PlaceCard({
+  place,
+  layout = "grid",
+  onEdit,           // 省略可: 渡せば「編集」ボタン表示
+  onDelete,         // 省略可: 渡せば「削除」ボタン表示（confirm付き）
+  showActions = true,
+}) {
   const img = place.first_photo_url || null;
 
   const address =
@@ -11,6 +20,42 @@ export default function PlaceCard({ place, layout = "grid" }) {
     "-";
 
   const isList = layout === "list";
+  const isDeleted = !!place.deleted_at;
+
+  // Google マップ URL を組み立て（place_id > 住所 > 緯度経度）
+  function buildMapsUrl(p) {
+    if (p?.google_place_id) {
+      return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(
+        p.google_place_id
+      )}`;
+    }
+    const addr =
+      p?.full_address ||
+      p?.address_line ||
+      [p?.city, p?.state, p?.postal_code, p?.country].filter(Boolean).join(" ") ||
+      "";
+    const name = p?.name || "";
+    const q = [name, addr].filter(Boolean).join(" ").trim();
+
+    if (q) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+    }
+    if (p?.latitude != null && p?.longitude != null) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        `${p.latitude},${p.longitude}`
+      )}`;
+    }
+    return null;
+  }
+
+  const mapsUrl = buildMapsUrl(place);
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    const ok = window.confirm(`「${place.name || "この場所"}」を削除しますか？`);
+    if (!ok) return;
+    await onDelete(place.id);
+  };
 
   return (
     <article
@@ -36,6 +81,12 @@ export default function PlaceCard({ place, layout = "grid" }) {
         <span className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] text-gray-600">
           ID: {place.id}
         </span>
+
+        {isDeleted && (
+          <span className="absolute left-2 top-2 rounded-full bg-rose-600/90 px-2 py-0.5 text-[10px] text-white">
+            削除済み
+          </span>
+        )}
       </div>
 
       {/* 本文 */}
@@ -46,11 +97,11 @@ export default function PlaceCard({ place, layout = "grid" }) {
         </div>
 
         {/* 住所 */}
-        <div className="text-sm text-gray-500 truncate" title={address}>
+        <div className="truncate text-sm text-gray-500" title={address}>
           {address}
         </div>
 
-        {/* 説明（2行に収めて省略。プラグイン不要の CSS） */}
+        {/* 説明（2行省略） */}
         {place.description && (
           <div
             className="mt-1 text-sm text-gray-700"
@@ -68,13 +119,49 @@ export default function PlaceCard({ place, layout = "grid" }) {
           </div>
         )}
 
-        {/* 以前のデザインに戻した「詳細を見る」 */}
-        <a
-          href={`/places/${place.id}`}
-          className="mt-2 inline-block text-sm text-indigo-600 hover:underline"
-        >
-          詳細を見る →
-        </a>
+        {/* アクション行 */}
+        {showActions && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <a
+              href={`/places/${place.id}`}
+              className="inline-flex items-center rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+            >
+              詳細
+            </a>
+
+            {mapsUrl && (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50"
+                title="Google マップで開く"
+              >
+                Googleマップへ
+              </a>
+            )}
+
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(place.id)}
+                className="inline-flex items-center rounded-lg border border-sky-600 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-50"
+              >
+                編集
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="inline-flex items-center rounded-lg border border-rose-400 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+              >
+                削除
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );

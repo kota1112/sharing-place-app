@@ -64,3 +64,5 @@ gem "devise-jwt", "~> 0.12.1"
 gem "rack-cors", "~> 3.0"
 
 gem "pg", "~> 1.6"
+
+gem 'discard', '~> 1.2'

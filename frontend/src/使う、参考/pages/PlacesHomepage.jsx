@@ -6,7 +6,7 @@ import PlacesMain from "../components/PlacesMain";
 import AppHeader from "../components/layout/AppHeader";
 import AppFooter from "../components/layout/AppFooter";
 
-// --- 簡易デバウンス（マイページと同じ実装）---
+// --- 簡易デバウンス ---
 function useDebounce(value, ms) {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -18,14 +18,13 @@ function useDebounce(value, ms) {
 
 export default function PlacesHomepage() {
   const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(null); // API が total を返す場合に表示
+  const [total, setTotal] = useState(null);
   const [q, setQ] = useState("");
-  const debouncedQ = useDebounce(q, 300);   // ★ 入力から300ms後に検索
-  const [mode, setMode] = useState("grid"); // 'list' | 'grid' | 'map'
+  const debouncedQ = useDebounce(q, 300);
+  const [mode, setMode] = useState("grid");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // debouncedQ が変わるたびに /places?q=... をフェッチ
   useEffect(() => {
     let aborted = false;
 
@@ -33,15 +32,11 @@ export default function PlacesHomepage() {
       try {
         setLoading(true);
         setErr("");
-
         const params = new URLSearchParams();
         const trimmed = String(query || "").trim();
         if (trimmed) params.set("q", trimmed);
-
-        // ページングを入れるならここで page / per_page を追加
         const path = params.toString() ? `/places?${params.toString()}` : "/places";
         const data = await api(path);
-
         if (aborted) return;
 
         if (Array.isArray(data)) {
@@ -76,8 +71,13 @@ export default function PlacesHomepage() {
         <h1 className="mb-4 text-2xl font-bold">Places_homepage</h1>
 
         <div className="mb-4 flex items-center gap-3">
-          {/* ★ ホームでもリアルタイム入力 → デバウンスでサーバ検索 */}
-          <SearchBar value={q} onChange={setQ} placeholder="場所名・都市・住所などで検索…" />
+          {/* ★ サジェストは全体スコープ */}
+          <SearchBar
+            value={q}
+            onChange={setQ}
+            placeholder="場所名・都市・住所などで検索…"
+            suggestPath="/places/suggest"
+          />
           <div className="ml-auto flex gap-1 rounded-xl bg-gray-100 p-1">
             {["list", "grid", "map"].map((m) => (
               <button

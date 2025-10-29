@@ -1,15 +1,14 @@
 // /* global google */
-// src/components/forMypage/MyPlacesMap.jsx
-// - 先頭アイテムの位置を初期中心に（zoom=12）。無ければ東京駅（zoom=5）
-// - 読み込み後に geolocation を一度だけ自動試行（右上に「現在地を使う」ボタンも装備）
-// - ピンの InfoWindow に「詳細 / 編集 / 削除」ボタンを表示（削除は確認ダイアログ後 onDelete を呼ぶ）
+// src/使う、参考/components/forMypage/MyPlacesMap.jsx
+// 初期表示は「先頭アイテムの位置 (zoom=12)」→ 直後に geolocation を自動試行（1回）
+// 右上の独自コントロール「現在地を使う」でも同ロジック（失敗時は先頭へ）
 
 import { useEffect, useRef } from "react";
 import { ensureMaps } from "../../../lib/maps";
 
 const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
 
-// geolocation 1回（Promiseラップ）
+// geolocation 1回
 function getCurrentPositionOnce(opts) {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -20,19 +19,14 @@ function getCurrentPositionOnce(opts) {
   });
 }
 
-export default function MyPlacesMap({
-  items = [],
-  greedyScroll = false,
-  onEdit, // (id:number) => void
-  onDelete, // (id:number) => Promise<void> | void
-}) {
+export default function MyPlacesMap({ items = [], greedyScroll = false }) {
   const ref = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    let map, meMarker, btnDiv, spinnerDiv, toastDiv;
-    let info; // 共有 InfoWindow
-    let advanced = false;
+    let map, meMarker, btnDiv, advanced = false;
+    let spinnerDiv, toastDiv;
+    let info; // ← 使い回す InfoWindow
 
     (async () => {
       await ensureMaps();
@@ -41,7 +35,7 @@ export default function MyPlacesMap({
       const g = window.google;
       const canImport = typeof g.maps.importLibrary === "function";
 
-      // 初期中心：先頭の座標があればそこ、無ければ東京駅
+      // 先頭 or 東京駅
       const first = items.find(
         (p) =>
           p &&
@@ -71,9 +65,10 @@ export default function MyPlacesMap({
         map = new g.maps.Map(ref.current, mapOpts);
       }
 
+      // InfoWindow を用意
       info = new g.maps.InfoWindow();
 
-      // マーカー
+      // places マーカー（クリックで InfoWindow）
       const valid = items.filter(
         (p) =>
           p &&
@@ -85,45 +80,8 @@ export default function MyPlacesMap({
 
       const openInfo = (place, anchor) => {
         if (!info) return;
-
-        // InfoWindow の中身（編集/削除ボタンあり）
         info.setContent(buildInfoHtml(place));
-
-        // ボタンクリックを紐付け（domready で要素が生成された後に）
-        g.maps.event.addListenerOnce(info, "domready", () => {
-          const root = document.getElementById(`infocontent-${place.id}`);
-          if (!root) return;
-
-          const editBtn = root.querySelector("[data-action='edit']");
-          const delBtn = root.querySelector("[data-action='delete']");
-
-          if (editBtn) {
-            editBtn.addEventListener("click", (e) => {
-              e.preventDefault();
-              onEdit?.(place.id);
-            });
-          }
-
-          if (delBtn) {
-            delBtn.addEventListener("click", async (e) => {
-              e.preventDefault();
-              const ok = window.confirm(
-                `「${
-                  place.name || "この場所"
-                }」を削除しますか？`
-              );
-              if (!ok) return;
-              try {
-                await onDelete?.(place.id);
-                info.close();
-              } catch (err) {
-                alert(`削除に失敗しました: ${err?.message || err}`);
-              }
-            });
-          }
-        });
-
-        // AdvancedMarker と旧 Marker の open 指定が異なる
+        // AdvancedMarker のときは {map, anchor} 指定、旧 Marker は (map, marker)
         if (anchor && typeof anchor.addListener === "function") {
           info.open({ map, anchor }); // AdvancedMarkerElement
         } else {
@@ -150,11 +108,7 @@ export default function MyPlacesMap({
       } else {
         for (const p of valid) {
           const position = { lat: +p.latitude, lng: +p.longitude };
-          const marker = new g.maps.Marker({
-            map,
-            position,
-            title: p.name || "",
-          });
+          const marker = new g.maps.Marker({ map, position, title: p.name || "" });
           marker.addListener("click", () => openInfo(p, marker));
         }
       }
@@ -180,7 +134,8 @@ export default function MyPlacesMap({
       spinnerDiv = document.createElement("div");
       spinnerDiv.style.cssText =
         "display:none;background:rgba(255,255,255,0.95);padding:8px 10px;margin:10px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.2);font-size:12px;";
-      spinnerDiv.innerHTML = `<span style="display:inline-block;width:14px;height:14px;border:3px solid #cbd5e1;border-top-color:#334155;border-radius:50%;margin-right:6px;vertical-align:-2px;animation:spin 1s linear infinite"></span>位置情報を取得中…`;
+      spinnerDiv.innerHTML =
+        `<span style="display:inline-block;width:14px;height:14px;border:3px solid #cbd5e1;border-top-color:#334155;border-radius:50%;margin-right:6px;vertical-align:-2px;animation:spin 1s linear infinite"></span>位置情報を取得中…`;
       map.controls[g.maps.ControlPosition.TOP_RIGHT].push(spinnerDiv);
 
       // 下右：トースト（失敗時）
@@ -220,9 +175,8 @@ export default function MyPlacesMap({
         } else {
           if (advanced) {
             (async () => {
-              const { AdvancedMarkerElement } = await g.maps.importLibrary(
-                "marker"
-              );
+              const { AdvancedMarkerElement } =
+                await g.maps.importLibrary("marker");
               const el = document.createElement("div");
               el.style.width = "12px";
               el.style.height = "12px";
@@ -257,7 +211,7 @@ export default function MyPlacesMap({
         map.setZoom(Math.max(map.getZoom(), 14));
       };
 
-      // 位置取得 共通ロジック
+      // 取得共通ロジック（ボタン/自動）
       async function acquire() {
         const tryGet = (opts) =>
           getCurrentPositionOnce(opts).then(
@@ -283,6 +237,7 @@ export default function MyPlacesMap({
           }
 
           if (!got) {
+            // 失敗 → 先頭の位置（zoom=12）に据え置き
             if (first) {
               map.setCenter(defaultCenter);
               map.setZoom(12);
@@ -298,7 +253,7 @@ export default function MyPlacesMap({
         }
       }
 
-      // ボタンの挙動
+      // ボタン動作
       btnDiv.onclick = () => acquire();
       btnDiv.onkeydown = (e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -307,14 +262,14 @@ export default function MyPlacesMap({
         }
       };
 
-      // 初回自動試行
+      // ★ 初回だけ自動で geolocation を試す
       acquire();
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [items, greedyScroll, onEdit, onDelete]);
+  }, [items, greedyScroll]);
 
   return (
     <div
@@ -325,7 +280,7 @@ export default function MyPlacesMap({
   );
 }
 
-/* ================= Utilities ================= */
+/* ================= Utilities (MapView と共通の見た目) ================= */
 
 function buildMapsUrl(p) {
   if (p.google_place_id) {
@@ -353,17 +308,25 @@ function buildMapsUrl(p) {
   return "https://www.google.com/maps";
 }
 
+/** サムネ小さめ + 右側に本文（先頭が無い場合は “No image”） */
 function buildInfoHtml(p) {
   const thumb = p.first_photo_url
     ? `<img src="${escapeHtml(p.first_photo_url)}" alt="${escapeHtml(
         p.name || ""
-      )}" style="width:72px;height:72px;border-radius:10px;object-fit:cover;flex:none;display:block;" />`
-    : `<div style="width:72px;height:72px;border-radius:10px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:12px;flex:none;">No image</div>`;
+      )}" style="
+            width:72px;height:72px;border-radius:10px;object-fit:cover;
+            flex:none;display:block;
+        " />`
+    : `<div style="
+            width:72px;height:72px;border-radius:10px;background:#e5e7eb;
+            display:flex;align-items:center;justify-content:center;
+            color:#6b7280;font-size:12px;flex:none;
+        ">No image</div>`;
 
   const name = p.name
-    ? `<div style="font-weight:700;font-size:14px;line-height:1.3;">${escapeHtml(
-        p.name
-      )}</div>`
+    ? `<div style="font-weight:700;font-size:14px;line-height:1.3;">
+         ${escapeHtml(p.name)}
+       </div>`
     : "";
 
   const addr =
@@ -372,24 +335,23 @@ function buildInfoHtml(p) {
     [p.city, p.state, p.postal_code, p.country].filter(Boolean).join(" ") ||
     "";
   const addrHtml = addr
-    ? `<div style="font-size:12px;color:#374151;margin-top:2px;">${escapeHtml(
-        addr
-      )}</div>`
+    ? `<div style="font-size:12px;color:#374151;margin-top:2px;">
+         ${escapeHtml(addr)}
+       </div>`
     : "";
 
   const desc = (p.description || "").trim();
   const descShort = desc.length > 60 ? `${desc.slice(0, 60)}…` : desc;
   const descHtml = descShort
-    ? `<div style="font-size:12px;color:#111827;margin-top:6px;">${escapeHtml(
-        descShort
-      )}</div>`
+    ? `<div style="font-size:12px;color:#111827;margin-top:6px;">
+         ${escapeHtml(descShort)}
+       </div>`
     : "";
 
   const mapsUrl = buildMapsUrl(p);
 
-  // data-action でハンドラを紐付けする
   return `
-  <div id="infocontent-${p.id}" style="width:260px;padding:12px 12px 10px;border-radius:14px;">
+  <div style="width:260px;padding:12px 12px 10px;border-radius:14px;">
     <div style="display:flex;gap:10px;">
       ${thumb}
       <div style="min-width:0;flex:1 1 auto;">
@@ -400,10 +362,14 @@ function buildInfoHtml(p) {
     </div>
 
     <div style="display:flex;gap:8px;margin-top:10px;">
-      <a href="/places/${p.id}" style="text-decoration:none;background:#111827;color:#fff;padding:8px 10px;border-radius:10px;font-size:12px;">詳細</a>
-      <a href="${mapsUrl}" target="_blank" rel="noopener" style="text-decoration:none;background:#e5e7eb;color:#111827;padding:8px 10px;border-radius:10px;font-size:12px;">Googleマップ</a>
-      <a href="#" data-action="edit"  style="text-decoration:none;background:#0ea5e9;color:#fff;padding:8px 10px;border-radius:10px;font-size:12px;">編集</a>
-      <a href="#" data-action="delete" style="text-decoration:none;background:#fca5a5;color:#7f1d1d;padding:8px 10px;border-radius:10px;font-size:12px;">削除</a>
+      <a href="/places/${p.id}" style="
+           text-decoration:none;background:#111827;color:#fff;
+           padding:8px 10px;border-radius:10px;font-size:12px;
+         ">詳細を見る</a>
+      <a href="${mapsUrl}" target="_blank" rel="noopener" style="
+           text-decoration:none;background:#e5e7eb;color:#111827;
+           padding:8px 10px;border-radius:10px;font-size:12px;
+         ">Google マップで見る</a>
     </div>
   </div>`;
 }

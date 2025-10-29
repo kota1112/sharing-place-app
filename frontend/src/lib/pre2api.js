@@ -9,17 +9,6 @@ export function getToken()  { return localStorage.getItem("token"); }
 export function clearToken(){ localStorage.removeItem("token"); }
 
 /* =========================
- * 内部ユーティリティ
- * ========================= */
-// Devise-JWT は Authorization: Bearer <JWT> で返る前提
-function extractJwtFromResponse(res) {
-  const auth = res?.headers?.get?.("Authorization");
-  if (!auth) return null;
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  return m ? m[1] : null;
-}
-
-/* =========================
  * 共通API呼び出し
  * - JSON/Multipart 両対応（body or formData のどちらかを渡す）
  * - Authorization: Bearer <JWT> を自動付与
@@ -71,86 +60,6 @@ export async function api(
     catch { msg += ` :: ${text}`; }
   }
   throw new Error(msg);
-}
-
-/* =========================================================
- * Auth API
- * 既存のメール/パスワードと Google の両方をサポート
- * ルート:
- *  - POST /auth/sign_in    (Devise::SessionsController)
- *  - DELETE /auth/sign_out (Devise::SessionsController)
- *  - POST /auth/google     (OauthController#google)  ← id_token 直投げ方式
- * ========================================================= */
-
-// メール/パスワードでサインイン（従来の form-urlencoded に合わせる）
-export async function signIn(email, password) {
-  const res = await fetch(`${BASE}/auth/sign_in`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({
-      "user[email]": email,
-      "user[password]": password,
-    }),
-  });
-
-  // 可能なら本文を読む（エラー時のメッセージ用途）
-  let data = {};
-  try { data = await res.clone().json(); } catch {}
-
-  if (!res.ok) {
-    throw new Error(data?.error || data?.message || "Sign in failed");
-  }
-
-  // 優先順: Authorization ヘッダ → data.token → data.jwt
-  const jwt = extractJwtFromResponse(res) || data?.token || data?.jwt;
-  if (jwt) setToken(jwt);
-  return data; // { user: {...} } 等
-}
-
-// サインアウト（JWT失効）
-export async function signOut() {
-  const token = getToken();
-  try {
-    await fetch(`${BASE}/auth/sign_out`, {
-      method: "DELETE",
-      headers: {
-        Accept: "application/json",
-        Authorization: token ? `Bearer ${token}` : undefined,
-      },
-    });
-  } finally {
-    clearToken(); // 成否に関わらずローカルは破棄
-  }
-}
-
-// Google ログイン（Google Identity Services の id_token をサーバへ送る）
-export async function googleLogin(idToken) {
-  const res = await fetch(`${BASE}/auth/google`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ id_token: idToken }),
-  });
-
-  // 本文先読み（ヘッダと両対応）
-  let data = {};
-  try { data = await res.clone().json(); } catch {}
-
-  if (!res.ok) {
-    throw new Error(data?.error || data?.message || "Google login failed");
-  }
-
-  // 優先順: Authorization ヘッダ → data.token → data.jwt
-  const jwt = extractJwtFromResponse(res) || data?.token || data?.jwt;
-  if (jwt) setToken(jwt);
-
-  return {
-    token: jwt || null,
-    user: data?.user || null,
-    raw: data,
-  };
 }
 
 /* =========================================================
@@ -221,13 +130,14 @@ export async function updatePlaceWithPhotos(id, payload, files = [], removeIds =
 /**
  * 写真の削除（単体）
  * - 使い方:
- *    deletePlacePhoto(placeId, blobId)           // attachment/blobs ID 指定で削除
+ *    deletePlacePhoto(placeId, blobId)           // blob(attachment) ID 指定で削除
  *    deletePlacePhoto(placeId, imageUrl)         // URL 指定で削除（サーバで照合）
- * - バックエンド側ルート:
+ * - バックエンド側ルート例:
  *    DELETE /places/:id/photos/:photo_id
  *    POST   /places/:id/delete_photo   { url: "..." }
  */
 export async function deletePlacePhoto(placeId, photoIdOrUrl) {
+  // 数字・数値文字列なら ID とみなす
   const isId =
     typeof photoIdOrUrl === "number" ||
     (typeof photoIdOrUrl === "string" && /^\d+$/.test(photoIdOrUrl));
@@ -236,6 +146,7 @@ export async function deletePlacePhoto(placeId, photoIdOrUrl) {
     const pid = String(photoIdOrUrl);
     return api(`/places/${placeId}/photos/${pid}`, { method: "DELETE" });
   }
+  // URLで送る（JSON）
   return api(`/places/${placeId}/delete_photo`, {
     method: "POST",
     body: { url: String(photoIdOrUrl) },

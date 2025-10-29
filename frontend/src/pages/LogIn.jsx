@@ -1,14 +1,76 @@
 // src/pages/LogIn.jsx
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { setToken } from "../lib/api";
+import { googleLogin } from "../lib/api"; // GIS の id_token をサーバへ送る
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // .env で設定
 
 export default function LogIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [gLoading, setGLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  const gsiBtnRef = useRef(null);
+  const initedRef = useRef(false);
+  const [gsiReady, setGsiReady] = useState(false);
+
+  // ====== Google Sign-In (Google Identity Services) 初期化 ======
+  useEffect(() => {
+    if (initedRef.current) return;
+    // index.html で <script src="https://accounts.google.com/gsi/client" async defer> を読み込んでいる前提
+    const g = window.google?.accounts?.id;
+    if (!g || !GOOGLE_CLIENT_ID || !gsiBtnRef.current) return;
+
+    const onCredential = async (resp) => {
+      if (!resp?.credential) return;
+      setErr("");
+      setGLoading(true);
+      try {
+        // back: POST /auth/google に id_token を送信 → JWT 返却（Authorization ヘッダ or JSON）
+        await googleLogin(resp.credential);
+        const params = new URLSearchParams(location.search);
+        const redirect = params.get("redirect") || "/place-homepage";
+        location.replace(redirect);
+      } catch (e) {
+        setErr(String(e.message || e));
+      } finally {
+        setGLoading(false);
+      }
+    };
+
+    g.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: onCredential,
+      auto_select: false,
+      ux_mode: "popup",
+      context: "signin",
+    });
+
+    // Google 公式ボタンをレンダリング（幅は style で 100%）
+    g.renderButton(gsiBtnRef.current, {
+      theme: "outline",
+      size: "large",
+      text: "signin_with",
+      shape: "rectangular",
+    });
+
+    initedRef.current = true;
+    setGsiReady(true);
+
+    return () => {
+      // StrictMode 等の二重初期化対策のためクリーンアップ
+      try {
+        window.google?.accounts?.id?.disableAutoSelect?.();
+        window.google?.accounts?.id?.cancel?.();
+      } catch {}
+    };
+  }, []);
+
+  // ====== 既存: メール/パスワード ログイン ======
   async function onSubmit(e) {
     e.preventDefault();
     if (loading) return;
@@ -17,10 +79,11 @@ export default function LogIn() {
 
     try {
       // Devise + devise-jwt : /auth/sign_in に form-urlencoded で送信
-      const res = await fetch(import.meta.env.VITE_API_BASE + "/auth/sign_in", {
+      const res = await fetch(`${API_BASE}/auth/sign_in`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          Accept: "application/json",
         },
         body: new URLSearchParams({
           "user[email]": email,
@@ -28,6 +91,7 @@ export default function LogIn() {
         }),
       });
 
+      // Devise-JWT は Authorization: Bearer <jwt> を返す
       const auth = res.headers.get("Authorization");
       if (!res.ok || !auth) {
         let msg = "Log in failed";
@@ -38,7 +102,7 @@ export default function LogIn() {
         throw new Error(msg);
       }
 
-      setToken(auth.replace("Bearer ", ""));
+      setToken(auth.replace(/^Bearer\s+/i, ""));
       // リダイレクト先: ?redirect=/foo があればそこへ、なければ /place-homepage
       const params = new URLSearchParams(location.search);
       const redirect = params.get("redirect") || "/place-homepage";
@@ -106,8 +170,34 @@ export default function LogIn() {
           {loading ? "Signing in..." : "Sign in"}
         </button>
 
+        {/* 区切り */}
+        <div className="flex items-center gap-3 my-3">
+          <div className="h-px flex-1 bg-gray-200" />
+          <span className="text-xs text-gray-400">or</span>
+          <div className="h-px flex-1 bg-gray-200" />
+        </div>
+
+        {/* ===== Google Sign-In ボタン（GIS） ===== */}
+        <div className="space-y-2">
+          <div ref={gsiBtnRef} className="flex justify-center" style={{ width: "100%" }} />
+          {!gsiReady && (
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-md border px-4 py-2 text-sm disabled:opacity-60"
+              title={
+                !GOOGLE_CLIENT_ID
+                  ? "VITE_GOOGLE_CLIENT_ID が未設定です"
+                  : "Loading Google Sign-In..."
+              }
+            >
+              {gLoading ? "Connecting..." : "Sign in with Google"}
+            </button>
+          )}
+        </div>
+
         {/* ここから：ログインせずにホームへ */}
-        <div className="flex items-center gap-3 my-2">
+        <div className="flex items-center gap-3 my-3">
           <div className="h-px flex-1 bg-gray-200" />
           <span className="text-xs text-gray-400">or</span>
           <div className="h-px flex-1 bg-gray-200" />

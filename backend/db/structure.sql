@@ -213,6 +213,43 @@ CREATE TABLE public.schema_migrations (
 
 
 --
+-- Name: social_identities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.social_identities (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    provider character varying,
+    provider_uid character varying,
+    access_token text,
+    refresh_token text,
+    expires_at timestamp(6) without time zone,
+    raw_info jsonb,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: social_identities_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.social_identities_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: social_identities_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.social_identities_id_seq OWNED BY public.social_identities.id;
+
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -282,6 +319,13 @@ ALTER TABLE ONLY public.places ALTER COLUMN id SET DEFAULT nextval('public.place
 
 
 --
+-- Name: social_identities id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.social_identities ALTER COLUMN id SET DEFAULT nextval('public.social_identities_id_seq'::regclass);
+
+
+--
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -334,6 +378,14 @@ ALTER TABLE ONLY public.places
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: social_identities social_identities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.social_identities
+    ADD CONSTRAINT social_identities_pkey PRIMARY KEY (id);
 
 
 --
@@ -443,6 +495,13 @@ CREATE INDEX index_places_on_name_trgm ON public.places USING gin (name public.g
 
 
 --
+-- Name: index_social_identities_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_social_identities_on_user_id ON public.social_identities USING btree (user_id);
+
+
+--
 -- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -462,6 +521,14 @@ CREATE UNIQUE INDEX index_users_on_reset_password_token ON public.users USING bt
 
 ALTER TABLE ONLY public.places
     ADD CONSTRAINT fk_rails_0cb7500b61 FOREIGN KEY (author_id) REFERENCES public.users(id);
+
+
+--
+-- Name: social_identities fk_rails_73b5c2a884; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.social_identities
+    ADD CONSTRAINT fk_rails_73b5c2a884 FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -487,6 +554,7 @@ ALTER TABLE ONLY public.active_storage_attachments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20251029150230'),
 ('20251028074815'),
 ('20251028074741'),
 ('20251028032711'),

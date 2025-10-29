@@ -1,4 +1,3 @@
-# app/models/place.rb
 class Place < ApplicationRecord
   # --- Associations ---
   belongs_to :author, class_name: 'User', optional: true
@@ -23,6 +22,15 @@ class Place < ApplicationRecord
   validates :website_url, length: { maximum: 2048 }, allow_blank: true
   validates :phone, length: { maximum: 100 }, allow_blank: true
 
+  # --- Soft Delete ---
+  default_scope { where(deleted_at: nil) }
+  scope :with_deleted, -> { unscope(where: :deleted_at) }
+  scope :only_deleted, -> { unscoped.where.not(deleted_at: nil) }
+
+  def soft_deleted?
+    deleted_at.present?
+  end
+
   # --- Helpers: Address ---
   def full_address
     [address_line, city, state, postal_code, country].compact_blank.join(' ')
@@ -34,8 +42,6 @@ class Place < ApplicationRecord
   end
 
   # --- Search scope (DB依存ロジックは安全に分岐) ---
-  # PG: ILIKE + concat_ws
-  # SQLite: LOWER + LIKE + || 連結
   scope :search_text, ->(q) {
     q = q.to_s.strip
     next all if q.blank?
@@ -84,10 +90,7 @@ class Place < ApplicationRecord
   # --- Geocoding (任意機能・未設定でも落ちない) ---
   def geocode_if_needed
     return unless should_geocode?
-
-    # GeocoderService が無い環境でも落ちないように防御
-    return unless defined?(GeocoderService) &&
-                  GeocoderService.respond_to?(:google_geocode)
+    return unless defined?(GeocoderService) && GeocoderService.respond_to?(:google_geocode)
 
     if (res = GeocoderService.google_geocode(full_address))
       self.latitude        = res[:lat]
@@ -100,15 +103,12 @@ class Place < ApplicationRecord
     end
   rescue => e
     Rails.logger.warn("[Place#geocode_if_needed] skipped: #{e.class} #{e.message}")
-    # 地図は任意機能なので失敗しても保存は継続
     true
   end
 
   def should_geocode?
-    # 住所が空なら geocode しない
     return false if full_address.blank?
 
-    # 住所のどれかが変わった？
     address_changed =
       will_save_change_to_address_line? ||
       will_save_change_to_city? ||
@@ -117,8 +117,6 @@ class Place < ApplicationRecord
       will_save_change_to_country?
 
     coords_blank = latitude.blank? || longitude.blank?
-
-    # 期限切れ（既定: 30日）
     max_age = safe_geocode_config(:max_cache_age) || 30.days
     expired = respond_to?(:geocoded_at) && geocoded_at.present? && Time.current >= (geocoded_at + max_age)
 
@@ -126,7 +124,6 @@ class Place < ApplicationRecord
   end
 
   def safe_geocode_config(key)
-    # config.x.geocoding.* が未定義でも落ちないように
     cfg = Rails.application.config.x
     return nil unless cfg.respond_to?(:geocoding) && cfg.geocoding.respond_to?(key)
     cfg.geocoding.public_send(key)

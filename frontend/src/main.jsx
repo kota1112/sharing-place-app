@@ -13,6 +13,8 @@ import MyPage from "./使う、参考/pages/MyPage.jsx";
 import PlaceEditPage from "./使う、参考/pages/PlaceEditPage.jsx";
 import SignUp from "./pages/SignUp.jsx";
 import Post from "./pages/Post.jsx";
+import AccountConnections from "./pages/AccountConnections.jsx";
+import AccountSettings from "./pages/AccountSettings.jsx";
 
 // /* ===== 開発用: Vite の env をブラウザ(console)で確認できるようにする =====
 //    テストが終わったら削除してOK（本番では残さない） */
@@ -36,6 +38,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/place/new" element={<Post />} />
         <Route path="/places/:id/edit" element={<PlaceEditPage />} />
         <Route path="/mypage" element={<MyPage />} />
+        <Route path="/account/settings" element={<AccountSettings />} />
+        <Route path="/account/connections" element={<AccountConnections />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<LogIn />} />
         <Route path="/index" element={<PlacesIndex />} />

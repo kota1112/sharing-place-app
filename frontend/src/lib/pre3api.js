@@ -49,12 +49,7 @@ export async function api(
 
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, {
-      method,
-      headers,
-      body: fetchBody,
-      signal: ctrl.signal,
-    });
+    res = await fetch(`${BASE}${path}`, { method, headers, body: fetchBody, signal: ctrl.signal });
   } catch (e) {
     clearTimeout(tid);
     throw new Error(`Network error or timeout: ${e?.message || e}`);
@@ -72,11 +67,8 @@ export async function api(
   const text = await res.text().catch(() => "");
   let msg = `HTTP ${res.status} ${res.statusText}`;
   if (text) {
-    try {
-      msg += ` :: ${JSON.stringify(JSON.parse(text))}`;
-    } catch {
-      msg += ` :: ${text}`;
-    }
+    try { msg += ` :: ${JSON.stringify(JSON.parse(text))}`; }
+    catch { msg += ` :: ${text}`; }
   }
   throw new Error(msg);
 }
@@ -85,11 +77,11 @@ export async function api(
  * Auth API
  * 既存のメール/パスワードと Google の両方をサポート
  * ルート:
- *  - POST   /auth/sign_in
+ *  - POST /auth/sign_in
  *  - DELETE /auth/sign_out
- *  - POST   /auth/google        (OauthController#google)
- *  - POST   /auth/link/google   ← 後からGoogleを紐づける
- *  - DELETE /auth/link/google   ← 紐づけたGoogleを外す
+ *  - POST /auth/google       (OauthController#google)  ← id_token 直投げ方式
+ *  - POST /auth/link/google  ← 今回追加（Googleを後付けで紐づけ）
+ *  - DELETE /auth/link/google ← 今回追加（Googleを解除）
  * ========================================================= */
 
 // メール/パスワードでサインイン
@@ -107,9 +99,7 @@ export async function signIn(email, password) {
   });
 
   let data = {};
-  try {
-    data = await res.clone().json();
-  } catch {}
+  try { data = await res.clone().json(); } catch {}
 
   if (!res.ok) {
     throw new Error(data?.error || data?.message || "Sign in failed");
@@ -145,9 +135,7 @@ export async function googleLogin(idToken) {
   });
 
   let data = {};
-  try {
-    data = await res.clone().json();
-  } catch {}
+  try { data = await res.clone().json(); } catch {}
 
   if (!res.ok) {
     throw new Error(data?.error || data?.message || "Google login failed");
@@ -163,9 +151,10 @@ export async function googleLogin(idToken) {
   };
 }
 
-/* ===== Google を後から紐づける／外す ===== */
+/* ===== ここから追加：あとで Google を紐づける／解除する ===== */
 
-// 今ログインしてるユーザーのアカウントに Google を「後から」紐づける
+// いまログインしてるユーザーのアカウントに Google を「後から」くっつける
+// フロントでは GIS で id_token を取ってからこれを呼ぶ
 export async function linkGoogle(idToken) {
   const res = await fetch(`${BASE}/auth/link/google`, {
     method: "POST",
@@ -181,10 +170,10 @@ export async function linkGoogle(idToken) {
   if (!res.ok) {
     throw new Error(data?.error || data?.message || "Link failed");
   }
-  return data;
+  return data; // { linked: true, provider: "google" } を想定
 }
 
-// 今ログインしてるユーザーから Google を外す
+// いまログインしてるユーザーから Google を外す
 export async function unlinkGoogle() {
   const res = await fetch(`${BASE}/auth/link/google`, {
     method: "DELETE",
@@ -198,46 +187,7 @@ export async function unlinkGoogle() {
   if (!res.ok) {
     throw new Error(data?.error || data?.message || "Unlink failed");
   }
-  return data;
-}
-
-/* ===== パスワード関連（追加） ===== */
-
-// ① 通常の「パスワード忘れた」→ Devise の PasswordsController#create に投げる想定
-export async function requestPasswordReset(email) {
-  const res = await fetch(`${BASE}/auth/password`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ email }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.error || data?.message || "Reset email failed");
-  }
-  return data;
-}
-
-// ② Google連携してる人だけOKなやつ → さっき routes.rb に追加したやつ
-export async function requestGooglePasswordReset(email) {
-  const res = await fetch(`${BASE}/auth/password/forgot_via_google`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ email }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // サーバ側で "google_not_linked" とか返してるならここで拾える
-    throw new Error(data?.error || "Reset via Google failed");
-  }
-  return data;
+  return data; // { linked: false, provider: "google" } を想定
 }
 
 /* =========================================================
@@ -267,23 +217,14 @@ export async function createPlace(payload) {
   return api(`/places`, { method: "POST", body: { place: payload } });
 }
 
-// 作成＋写真（multipart）
+// 作成＋写真
 export async function createPlaceWithPhotos(payload, files = []) {
   const fd = new FormData();
   fd.append("place[name]", payload.name ?? "");
   if (payload.description != null) fd.append("place[description]", payload.description);
   [
-    "address_line",
-    "city",
-    "state",
-    "postal_code",
-    "country",
-    "latitude",
-    "longitude",
-    "google_place_id",
-    "phone",
-    "website_url",
-    "status",
+    "address_line","city","state","postal_code","country",
+    "latitude","longitude","google_place_id","phone","website_url","status",
   ].forEach((k) => payload[k] != null && fd.append(`place[${k}]`, payload[k]));
   files.forEach((f) => fd.append("photos[]", f));
   return api(`/places`, { method: "POST", formData: fd });
@@ -294,23 +235,14 @@ export async function updatePlace(id, payload) {
   return api(`/places/${id}`, { method: "PATCH", body: { place: payload } });
 }
 
-// 更新＋写真（multipart）
+// 更新＋写真
 export async function updatePlaceWithPhotos(id, payload, files = [], removeIds = []) {
   const fd = new FormData();
   fd.append("place[name]", payload.name ?? "");
   if (payload.description != null) fd.append("place[description]", payload.description);
   [
-    "address_line",
-    "city",
-    "state",
-    "postal_code",
-    "country",
-    "latitude",
-    "longitude",
-    "google_place_id",
-    "phone",
-    "website_url",
-    "status",
+    "address_line","city","state","postal_code","country",
+    "latitude","longitude","google_place_id","phone","website_url","status",
   ].forEach((k) => payload[k] != null && fd.append(`place[${k}]`, payload[k]));
 
   files.forEach((f) => fd.append("photos[]", f));
@@ -363,19 +295,4 @@ export async function suggestMine(q, limit = 8) {
 /* ===== プロフィール ===== */
 export async function getMe() {
   return api(`/auth/me`);
-}
-
-/* ===== アカウント更新（新規追加） ===== */
-/**
- * アカウント設定ページから使う想定のAPI
- * fields: {
- *   email?, display_name?, username?,
- *   current_password?, password?, password_confirmation?
- * }
- */
-export async function updateAccount(fields) {
-  return api(`/auth`, {
-    method: "PATCH", // RegistrationsController#update が PATCH/PUT 両方OKな想定
-    body: { user: fields },
-  });
 }

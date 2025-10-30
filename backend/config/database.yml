@@ -3,16 +3,17 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  # ENVが未設定でも落ちないように fetch のブロック形式に統一
+
+  # コネクション数（なければ10）
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 10 } %>
 
   # 優先度: PGUSER → USER → "postgres"
   username: <%= ENV.fetch("PGUSER") { ENV.fetch("USER") { "postgres" } } %>
 
-  # Postgres.app は host/port 省略（UNIXソケット）で接続可。
-  # Homebrew/EDB などTCPで繋ぐときは環境変数で上書き。
-  host: <%= ENV["PGHOST"] %>  # 例: "127.0.0.1"
-  port: <%= ENV["PGPORT"] %>  # 例: "5432" / "5433" / "5434"
+  # host / port は「.env がなくても動く」ようにデフォルトを入れておく
+  # ここが今回のポイント
+  host: <%= ENV.fetch("PGHOST", "127.0.0.1") %>   # ← 未設定なら 127.0.0.1
+  port: <%= ENV.fetch("PGPORT", 5432) %>           # ← 未設定なら 5432 固定
 
   # パスワードが必要な環境（EDBなど）は PGPASSWORD を設定して使う
   password: <%= ENV["PGPASSWORD"] %>

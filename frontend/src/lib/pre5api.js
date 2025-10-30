@@ -201,45 +201,6 @@ export async function unlinkGoogle() {
   return data;
 }
 
-/* ===== パスワード関連（追加） ===== */
-
-// ① 通常の「パスワード忘れた」→ Devise の PasswordsController#create に投げる想定
-export async function requestPasswordReset(email) {
-  const res = await fetch(`${BASE}/auth/password`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ email }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.error || data?.message || "Reset email failed");
-  }
-  return data;
-}
-
-// ② Google連携してる人だけOKなやつ → さっき routes.rb に追加したやつ
-export async function requestGooglePasswordReset(email) {
-  const res = await fetch(`${BASE}/auth/password/forgot_via_google`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ email }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // サーバ側で "google_not_linked" とか返してるならここで拾える
-    throw new Error(data?.error || "Reset via Google failed");
-  }
-  return data;
-}
-
 /* =========================================================
  * Places API ラッパ
  * ========================================================= */
@@ -375,7 +336,7 @@ export async function getMe() {
  */
 export async function updateAccount(fields) {
   return api(`/auth`, {
-    method: "PATCH", // RegistrationsController#update が PATCH/PUT 両方OKな想定
+    method: "PATCH", // RegistrationsController#update が PATCH/PUT どちらもOKな想定
     body: { user: fields },
   });
 }

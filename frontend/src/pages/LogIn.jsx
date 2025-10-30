@@ -1,7 +1,11 @@
 // src/pages/LogIn.jsx
 import { useEffect, useRef, useState } from "react";
-import { setToken } from "../lib/api";
-import { googleLogin } from "../lib/api"; // GIS の id_token をサーバへ送る
+import {
+  setToken,
+  googleLogin,
+  requestPasswordReset,
+  requestGooglePasswordReset,
+} from "../lib/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // .env で設定
@@ -14,6 +18,11 @@ export default function LogIn() {
   const [gLoading, setGLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  // ↓ 追加：パスワード忘れパネル用
+  const [showForgot, setShowForgot] = useState(false);
+  const [resetMsg, setResetMsg] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+
   const gsiBtnRef = useRef(null);
   const initedRef = useRef(false);
   const [gsiReady, setGsiReady] = useState(false);
@@ -21,7 +30,6 @@ export default function LogIn() {
   // ====== Google Sign-In (Google Identity Services) 初期化 ======
   useEffect(() => {
     if (initedRef.current) return;
-    // index.html で <script src="https://accounts.google.com/gsi/client" async defer> を読み込んでいる前提
     const g = window.google?.accounts?.id;
     if (!g || !GOOGLE_CLIENT_ID || !gsiBtnRef.current) return;
 
@@ -29,8 +37,8 @@ export default function LogIn() {
       if (!resp?.credential) return;
       setErr("");
       setGLoading(true);
+      setResetMsg("");
       try {
-        // back: POST /auth/google に id_token を送信 → JWT 返却（Authorization ヘッダ or JSON）
         await googleLogin(resp.credential);
         const params = new URLSearchParams(location.search);
         const redirect = params.get("redirect") || "/place-homepage";
@@ -50,7 +58,6 @@ export default function LogIn() {
       context: "signin",
     });
 
-    // Google 公式ボタンをレンダリング（幅は style で 100%）
     g.renderButton(gsiBtnRef.current, {
       theme: "outline",
       size: "large",
@@ -62,7 +69,6 @@ export default function LogIn() {
     setGsiReady(true);
 
     return () => {
-      // StrictMode 等の二重初期化対策のためクリーンアップ
       try {
         window.google?.accounts?.id?.disableAutoSelect?.();
         window.google?.accounts?.id?.cancel?.();
@@ -76,9 +82,9 @@ export default function LogIn() {
     if (loading) return;
     setLoading(true);
     setErr("");
+    setResetMsg("");
 
     try {
-      // Devise + devise-jwt : /auth/sign_in に form-urlencoded で送信
       const res = await fetch(`${API_BASE}/auth/sign_in`, {
         method: "POST",
         headers: {
@@ -91,19 +97,21 @@ export default function LogIn() {
         }),
       });
 
-      // Devise-JWT は Authorization: Bearer <jwt> を返す
       const auth = res.headers.get("Authorization");
       if (!res.ok || !auth) {
         let msg = "Log in failed";
         try {
           const data = await res.json();
-          msg = data?.errors?.join("\n") || data?.error || msg;
+          msg =
+            data?.errors?.join("\n") ||
+            data?.error ||
+            data?.message ||
+            msg;
         } catch {}
         throw new Error(msg);
       }
 
       setToken(auth.replace(/^Bearer\s+/i, ""));
-      // リダイレクト先: ?redirect=/foo があればそこへ、なければ /place-homepage
       const params = new URLSearchParams(location.search);
       const redirect = params.get("redirect") || "/place-homepage";
       location.replace(redirect);
@@ -114,6 +122,46 @@ export default function LogIn() {
     }
   }
 
+  // ====== 追加: Forgot password のハンドラ ======
+  async function handleNormalReset() {
+    if (!email) {
+      setErr("Please fill email first.");
+      setShowForgot(true);
+      return;
+    }
+    setResetLoading(true);
+    setErr("");
+    setResetMsg("");
+    try {
+      await requestPasswordReset(email);
+      setResetMsg("Password reset email has been sent.");
+    } catch (e) {
+      setErr(e.message || "Reset failed");
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
+  async function handleGoogleReset() {
+    if (!email) {
+      setErr("Please fill email first.");
+      setShowForgot(true);
+      return;
+    }
+    setResetLoading(true);
+    setErr("");
+    setResetMsg("");
+    try {
+      await requestGooglePasswordReset(email);
+      setResetMsg("Reset link was sent to your Google-linked email.");
+    } catch (e) {
+      // サーバ側が「google_not_linked」などを返したらここで表示される
+      setErr(e.message || "Google-linked reset failed");
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   return (
     <main className="max-w-sm mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Log in</h1>
@@ -121,6 +169,11 @@ export default function LogIn() {
       {err && (
         <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-red-700 text-sm whitespace-pre-line">
           {err}
+        </div>
+      )}
+      {resetMsg && (
+        <div className="mb-3 rounded-md border border-green-200 bg-green-50 p-2 text-green-700 text-sm whitespace-pre-line">
+          {resetMsg}
         </div>
       )}
 
@@ -162,6 +215,44 @@ export default function LogIn() {
           </div>
         </label>
 
+        {/* Forgot password toggle */}
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={() => setShowForgot((v) => !v)}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            {showForgot ? "Close password help" : "Forgot password?"}
+          </button>
+        </div>
+
+        {showForgot && (
+          <div className="rounded-md border bg-gray-50 p-3 space-y-2">
+            <p className="text-xs text-gray-600">
+              Choose how to reset your password.
+            </p>
+            <button
+              type="button"
+              onClick={handleNormalReset}
+              disabled={resetLoading}
+              className="w-full rounded-md bg-white border px-3 py-2 text-sm text-left disabled:opacity-60"
+            >
+              ① Send normal reset email
+            </button>
+            <button
+              type="button"
+              onClick={handleGoogleReset}
+              disabled={resetLoading}
+              className="w-full rounded-md bg-white border px-3 py-2 text-sm text-left disabled:opacity-60"
+            >
+              ② Send reset to Google-linked account
+            </button>
+            <p className="text-[10px] text-gray-400">
+              * (2) works only if this email is already linked with Google.
+            </p>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={loading}
@@ -187,7 +278,7 @@ export default function LogIn() {
               className="w-full rounded-md border px-4 py-2 text-sm disabled:opacity-60"
               title={
                 !GOOGLE_CLIENT_ID
-                  ? "VITE_GOOGLE_CLIENT_ID が未設定です"
+                  ? "VITE_GOOGLE_CLIENT_ID is not set"
                   : "Loading Google Sign-In..."
               }
             >
@@ -208,7 +299,6 @@ export default function LogIn() {
         >
           Continue without account
         </a>
-        {/* ここまで */}
 
         <div className="text-center text-sm text-gray-500">
           Don’t have an account?{" "}

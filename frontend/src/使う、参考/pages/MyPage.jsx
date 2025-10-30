@@ -1,5 +1,6 @@
+// src/pages/MyPage.jsx
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 import AppHeader from "../components/layout/AppHeader";
 import AppFooter from "../components/layout/AppFooter";
@@ -9,9 +10,14 @@ import MyPlacesList from "../components/forMypage/MyPlacesList";
 import MyPlacesGrid from "../components/forMypage/MyPlacesGrid";
 import MyPlacesMap from "../components/forMypage/MyPlacesMap";
 
+// ← 元のコードでは "../../lib/api" になっていましたが
+// MyPage.jsx が src/pages/ 配下にある前提なら "../lib/api" が正しいはずなので直しておきます。
+// もし本当に2つ上にあるならだけ "../../" に戻してください。
 import { api, getMyPlaces, deletePlaceSoft, getToken } from "../../lib/api";
 
-// ===== JWT フォールバック（数値IDだけの sub は使わない） =====
+/* =========================
+ * JWT フォールバック（数値IDだけの sub は使わない）
+ * ========================= */
 function decodeUsernameFromJWT() {
   try {
     const raw = getToken() || localStorage.getItem("token");
@@ -36,7 +42,9 @@ function decodeUsernameFromJWT() {
   }
 }
 
-// ===== デバウンス =====
+/* =========================
+ * デバウンス
+ * ========================= */
 function useDebounce(value, ms) {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -144,11 +152,23 @@ export default function MyPage() {
     <>
       <AppHeader />
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-16">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold">My Page</h1>
-          <div className="text-gray-500">
-            Account: <span className="font-semibold">{profile.username}</span>
+        <header className="mb-8 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">My Page</h1>
+            <div className="text-gray-500">
+              Account: <span className="font-semibold">{profile.username}</span>
+            </div>
           </div>
+
+          {/* ←ここを追加：マイページからアカウント設定に飛ぶボタン */}
+          {authed && (
+            <Link
+              to="/account/settings"
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              アカウント設定へ
+            </Link>
+          )}
         </header>
 
         {/* 未ログインの案内表示 */}

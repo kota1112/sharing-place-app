@@ -1,5 +1,5 @@
 // src/pages/MyPage.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 
 import AppHeader from "../components/layout/AppHeader";
@@ -10,10 +10,12 @@ import MyPlacesList from "../components/forMypage/MyPlacesList";
 import MyPlacesGrid from "../components/forMypage/MyPlacesGrid";
 import MyPlacesMap from "../components/forMypage/MyPlacesMap";
 
-// ← 元のコードでは "../../lib/api" になっていましたが
-// MyPage.jsx が src/pages/ 配下にある前提なら "../lib/api" が正しいはずなので直しておきます。
-// もし本当に2つ上にあるならだけ "../../" に戻してください。
-import { api, getMyPlaces, deletePlaceSoft, getToken } from "../lib/api";
+import {
+  api,
+  fetchMyPlaces,        // ← ページネーション対応版
+  deletePlaceSoft,
+  getToken,
+} from "../lib/api";
 
 /* =========================
  * JWT フォールバック（数値IDだけの sub は使わない）
@@ -62,22 +64,33 @@ export default function MyPage() {
   const authed = !!(getToken() || localStorage.getItem("token"));
 
   const [profile, setProfile] = useState({ username: "—" });
+
+  // 一覧データ
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const debouncedQ = useDebounce(q, 300);
 
+  // ページネーション
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const PER = 50;
+  const [total, setTotal] = useState(null); // APIのtotalを表示用に保存
+
+  // 表示モード
   const [mode, setMode] = useState("list"); // 'list' | 'grid' | 'map'
-  const [loading, setLoading] = useState(authed); // 未ログインなら読み込み表示しない
+
+  // ローディングとエラー
+  const [loading, setLoading] = useState(authed);
   const [err, setErr] = useState("");
 
   // ===== プロフィール取得（/auth/me 優先 → JWT フォールバック） =====
   useEffect(() => {
-    if (!authed) return; // 未ログイン時は取得しない
+    if (!authed) return;
     (async () => {
       try {
         let username = "—";
         try {
-          const res = await api("/auth/me"); // 成功すればここを最優先
+          const res = await api("/auth/me");
           const u = res?.user || {};
           username =
             u.username ||
@@ -97,42 +110,70 @@ export default function MyPage() {
     })();
   }, [authed]);
 
-  // ===== 自分の Places 取得 =====
-  async function loadMine(keyword = "") {
-    if (!authed) return; // 未ログイン時は呼ばない
-    setLoading(true);
-    setErr("");
-    try {
-      const params = {};
-      const v = (keyword || "").trim();
-      if (v) params.q = v;
-      const data = await getMyPlaces(params);
-      setItems(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setErr(e?.message || String(e));
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // ===== /places/mine を1ページ分読む関数 =====
+  const loadPage = useCallback(
+    async (nextPage, query, { replace } = { replace: false }) => {
+      if (!authed) return;
+      setLoading(true);
+      setErr("");
 
+      try {
+        const res = await fetchMyPlaces({
+          page: nextPage,
+          per: PER,
+          q: (query || "").trim(),
+        });
+
+        // Rails側は { data: [...], meta: {...} } を返す実装にしている
+        const data = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        const meta = res?.meta || {};
+
+        if (replace) {
+          setItems(data);
+        } else {
+          // 追加読み込み
+          setItems((prev) => [...prev, ...data]);
+        }
+
+        const totalPages = meta.total_pages || 1;
+        setHasMore(nextPage < totalPages);
+        setPage(nextPage);
+        setTotal(typeof meta.total === "number" ? meta.total : null);
+      } catch (e) {
+        setErr(e?.message || String(e));
+        // エラー時は追加しない
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authed]
+  );
+
+  // ===== 検索語が確定したら1ページ目から読み直し =====
   useEffect(() => {
-    if (authed) loadMine(debouncedQ);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQ, authed]);
+    if (!authed) return;
+    // 検索が変わったので 1ページ目から
+    setPage(1);
+    loadPage(1, debouncedQ, { replace: true });
+  }, [debouncedQ, authed, loadPage]);
 
-  // ===== ハンドラ =====
-  const handleEdit = (id) => navigate(`/places/${id}/edit`);
-
+  // ===== 削除 =====
   const handleDelete = async (id) => {
+    if (!authed) return;
     try {
-      await deletePlaceSoft(id); // ソフトデリート
-      await loadMine(debouncedQ); // 再読込
+      await deletePlaceSoft(id);
+      // 削除後は「今の検索条件で1ページ目から」再取得
+      setPage(1);
+      await loadPage(1, debouncedQ, { replace: true });
     } catch (e) {
       alert(`削除に失敗しました: ${e?.message || e}`);
     }
   };
 
+  // ===== 編集 =====
+  const handleEdit = (id) => navigate(`/places/${id}/edit`);
+
+  // ===== トグルUI =====
   const Toggle = (
     <div className="flex gap-2">
       {["list", "grid", "map"].map((m) => (
@@ -163,7 +204,6 @@ export default function MyPage() {
             </div>
           </div>
 
-          {/* ←ここを追加：マイページからアカウント設定に飛ぶボタン */}
           {authed && (
             <Link
               to="/account/settings"
@@ -179,8 +219,7 @@ export default function MyPage() {
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
             <p className="mb-2 font-medium">データがありません。</p>
             <p className="text-sm text-slate-600">
-              My Page と Post
-              を利用するには、アカウントを登録してサインインしてください。
+              My Page と Post を利用するには、アカウントを登録してサインインしてください。
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <a
@@ -205,9 +244,10 @@ export default function MyPage() {
           </div>
         )}
 
-        {/* 自分の登録のみをサジェスト（ログイン時のみ表示） */}
+        {/* ログインしているときの本体 */}
         {authed && (
           <>
+            {/* 検索バー（自分の登録だけサジェスト） */}
             <div className="mb-4">
               <SearchBar
                 value={q}
@@ -217,20 +257,25 @@ export default function MyPage() {
               />
             </div>
 
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex items-center justify-between gap-4">
               <h2 className="text-lg font-semibold">場所リスト</h2>
               <div className="flex items-center gap-4">
-                <div className="text-sm text-gray-500">{items.length}</div>
+                <div className="text-sm text-gray-500">
+                  {total != null ? `${items.length} / ${total}` : items.length}
+                </div>
                 {Toggle}
               </div>
             </div>
 
             <section className="min-h-[280px]">
-              {loading && <p className="text-gray-500">読み込み中…</p>}
+              {loading && items.length === 0 && (
+                <p className="text-gray-500">読み込み中…</p>
+              )}
               {!loading && err && (
                 <p className="text-red-600">読み込みエラー: {err}</p>
               )}
-              {!loading && !err && (
+
+              {!err && (
                 <>
                   {mode === "list" && (
                     <MyPlacesList
@@ -255,6 +300,25 @@ export default function MyPage() {
                     />
                   )}
                 </>
+              )}
+
+              {/* もっと見る（まだページがあるときだけ） */}
+              {!err && hasMore && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => loadPage(page + 1, debouncedQ, { replace: false })}
+                    className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                    disabled={loading}
+                  >
+                    {loading ? "読み込み中…" : "もっと見る"}
+                  </button>
+                </div>
+              )}
+
+              {/* データが0件のとき */}
+              {!loading && !err && items.length === 0 && (
+                <p className="text-gray-400">該当する場所はありませんでした。</p>
               )}
             </section>
           </>

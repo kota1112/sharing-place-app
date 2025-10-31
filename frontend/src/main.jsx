@@ -4,15 +4,17 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./index.css";
 
-import PlacesHomepage from "./使う、参考/pages/PlacesHomepage.jsx";
+import PlacesHomepage from "./pages/PlacesHomepage.jsx";
 import PlaceNew from "./pages/PlaceNew.jsx";
 import LogIn from "./pages/LogIn.jsx";
 import PlacesIndex from "./pages/PlacesIndex.jsx";
-import PlaceDetail from "./使う、参考/pages/PlaceDetail.jsx";
-import MyPage from "./使う、参考/pages/MyPage.jsx";
-import PlaceEditPage from "./使う、参考/pages/PlaceEditPage.jsx";
+import PlaceDetail from "./pages/PlaceDetail.jsx";
+import MyPage from "./pages/MyPage.jsx";
+import PlaceEditPage from "./pages/PlaceEditPage.jsx";
 import SignUp from "./pages/SignUp.jsx";
 import Post from "./pages/Post.jsx";
+import AccountConnections from "./pages/AccountConnections.jsx";
+import AccountSettings from "./pages/AccountSettings.jsx";
 
 // /* ===== 開発用: Vite の env をブラウザ(console)で確認できるようにする =====
 //    テストが終わったら削除してOK（本番では残さない） */
@@ -36,6 +38,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/place/new" element={<Post />} />
         <Route path="/places/:id/edit" element={<PlaceEditPage />} />
         <Route path="/mypage" element={<MyPage />} />
+        <Route path="/account/settings" element={<AccountSettings />} />
+        <Route path="/account/connections" element={<AccountConnections />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<LogIn />} />
         <Route path="/index" element={<PlacesIndex />} />

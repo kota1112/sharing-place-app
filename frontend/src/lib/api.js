@@ -9,6 +9,17 @@ export function getToken()  { return localStorage.getItem("token"); }
 export function clearToken(){ localStorage.removeItem("token"); }
 
 /* =========================
+ * 内部ユーティリティ
+ * ========================= */
+// Devise-JWT は Authorization: Bearer <JWT> で返る前提
+function extractJwtFromResponse(res) {
+  const auth = res?.headers?.get?.("Authorization");
+  if (!auth) return null;
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1] : null;
+}
+
+/* =========================
  * 共通API呼び出し
  * - JSON/Multipart 両対応（body or formData のどちらかを渡す）
  * - Authorization: Bearer <JWT> を自動付与
@@ -38,7 +49,12 @@ export async function api(
 
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, { method, headers, body: fetchBody, signal: ctrl.signal });
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: fetchBody,
+      signal: ctrl.signal,
+    });
   } catch (e) {
     clearTimeout(tid);
     throw new Error(`Network error or timeout: ${e?.message || e}`);
@@ -56,29 +72,191 @@ export async function api(
   const text = await res.text().catch(() => "");
   let msg = `HTTP ${res.status} ${res.statusText}`;
   if (text) {
-    try { msg += ` :: ${JSON.stringify(JSON.parse(text))}`; }
-    catch { msg += ` :: ${text}`; }
+    try {
+      msg += ` :: ${JSON.stringify(JSON.parse(text))}`;
+    } catch {
+      msg += ` :: ${text}`;
+    }
   }
   throw new Error(msg);
 }
 
 /* =========================================================
- * Places API ラッパ（バックエンドの最新仕様に対応）
+ * Auth API
+ * 既存のメール/パスワードと Google の両方をサポート
+ * ルート:
+ *  - POST   /auth/sign_in
+ *  - DELETE /auth/sign_out
+ *  - POST   /auth/google        (OauthController#google)
+ *  - POST   /auth/link/google   ← 後からGoogleを紐づける
+ *  - DELETE /auth/link/google   ← 紐づけたGoogleを外す
  * ========================================================= */
 
-// 自分の一覧（?with_deleted=1 / ?only_deleted=1 も可）
+// メール/パスワードでサインイン
+export async function signIn(email, password) {
+  const res = await fetch(`${BASE}/auth/sign_in`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({
+      "user[email]": email,
+      "user[password]": password,
+    }),
+  });
+
+  let data = {};
+  try {
+    data = await res.clone().json();
+  } catch {}
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Sign in failed");
+  }
+
+  const jwt = extractJwtFromResponse(res) || data?.token || data?.jwt;
+  if (jwt) setToken(jwt);
+  return data;
+}
+
+// サインアウト（JWT失効）
+export async function signOut() {
+  const token = getToken();
+  try {
+    await fetch(`${BASE}/auth/sign_out`, {
+      method: "DELETE",
+      headers: {
+        Accept: "application/json",
+        Authorization: token ? `Bearer ${token}` : undefined,
+      },
+    });
+  } finally {
+    clearToken();
+  }
+}
+
+// Google ログイン（id_token をサーバへ送る）
+export async function googleLogin(idToken) {
+  const res = await fetch(`${BASE}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ id_token: idToken }),
+  });
+
+  let data = {};
+  try {
+    data = await res.clone().json();
+  } catch {}
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Google login failed");
+  }
+
+  const jwt = extractJwtFromResponse(res) || data?.token || data?.jwt;
+  if (jwt) setToken(jwt);
+
+  return {
+    token: jwt || null,
+    user: data?.user || null,
+    raw: data,
+  };
+}
+
+/* ===== Google を後から紐づける／外す ===== */
+
+// 今ログインしてるユーザーのアカウントに Google を「後から」紐づける
+export async function linkGoogle(idToken) {
+  const res = await fetch(`${BASE}/auth/link/google`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken() || ""}`,
+    },
+    body: JSON.stringify({ id_token: idToken }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Link failed");
+  }
+  return data;
+}
+
+// 今ログインしてるユーザーから Google を外す
+export async function unlinkGoogle() {
+  const res = await fetch(`${BASE}/auth/link/google`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${getToken() || ""}`,
+    },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Unlink failed");
+  }
+  return data;
+}
+
+/* ===== パスワード関連（追加） ===== */
+
+// ① 通常の「パスワード忘れた」→ Devise の PasswordsController#create に投げる想定
+export async function requestPasswordReset(email) {
+  const res = await fetch(`${BASE}/auth/password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Reset email failed");
+  }
+  return data;
+}
+
+// ② Google連携してる人だけOKなやつ → さっき routes.rb に追加したやつ
+export async function requestGooglePasswordReset(email) {
+  const res = await fetch(`${BASE}/auth/password/forgot_via_google`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // サーバ側で "google_not_linked" とか返してるならここで拾える
+    throw new Error(data?.error || "Reset via Google failed");
+  }
+  return data;
+}
+
+/* =========================================================
+ * Places API ラッパ
+ * ========================================================= */
+
+// 自分の一覧
 export async function getMyPlaces(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return api(`/places/mine${qs ? `?${qs}` : ""}`);
 }
 
-// 公開一覧（管理者は ?with_deleted=1 可）
+// 公開一覧
 export async function searchPlaces(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return api(`/places${qs ? `?${qs}` : ""}`);
 }
 
-// 詳細（削除済みも取るなら include_deleted=1）
+// 詳細
 export async function getPlace(id, { includeDeleted = false } = {}) {
   const qs = includeDeleted ? "?include_deleted=1" : "";
   return api(`/places/${id}${qs}`);
@@ -95,8 +273,17 @@ export async function createPlaceWithPhotos(payload, files = []) {
   fd.append("place[name]", payload.name ?? "");
   if (payload.description != null) fd.append("place[description]", payload.description);
   [
-    "address_line","city","state","postal_code","country",
-    "latitude","longitude","google_place_id","phone","website_url","status",
+    "address_line",
+    "city",
+    "state",
+    "postal_code",
+    "country",
+    "latitude",
+    "longitude",
+    "google_place_id",
+    "phone",
+    "website_url",
+    "status",
   ].forEach((k) => payload[k] != null && fd.append(`place[${k}]`, payload[k]));
   files.forEach((f) => fd.append("photos[]", f));
   return api(`/places`, { method: "POST", formData: fd });
@@ -107,37 +294,33 @@ export async function updatePlace(id, payload) {
   return api(`/places/${id}`, { method: "PATCH", body: { place: payload } });
 }
 
-/**
- * 更新＋写真（multipart）
- * - 新規追加ファイル: files[]
- * - 既存写真の削除: removeIds[] を photos_to_purge[] として送信（オプション）
- */
+// 更新＋写真（multipart）
 export async function updatePlaceWithPhotos(id, payload, files = [], removeIds = []) {
   const fd = new FormData();
   fd.append("place[name]", payload.name ?? "");
   if (payload.description != null) fd.append("place[description]", payload.description);
   [
-    "address_line","city","state","postal_code","country",
-    "latitude","longitude","google_place_id","phone","website_url","status",
+    "address_line",
+    "city",
+    "state",
+    "postal_code",
+    "country",
+    "latitude",
+    "longitude",
+    "google_place_id",
+    "phone",
+    "website_url",
+    "status",
   ].forEach((k) => payload[k] != null && fd.append(`place[${k}]`, payload[k]));
 
   files.forEach((f) => fd.append("photos[]", f));
-  removeIds.forEach((pid) => fd.append("photos_to_purge[]", pid)); // optional
+  removeIds.forEach((pid) => fd.append("photos_to_purge[]", pid));
 
   return api(`/places/${id}`, { method: "PATCH", formData: fd });
 }
 
-/**
- * 写真の削除（単体）
- * - 使い方:
- *    deletePlacePhoto(placeId, blobId)           // blob(attachment) ID 指定で削除
- *    deletePlacePhoto(placeId, imageUrl)         // URL 指定で削除（サーバで照合）
- * - バックエンド側ルート例:
- *    DELETE /places/:id/photos/:photo_id
- *    POST   /places/:id/delete_photo   { url: "..." }
- */
+// 写真の削除（単体）
 export async function deletePlacePhoto(placeId, photoIdOrUrl) {
-  // 数字・数値文字列なら ID とみなす
   const isId =
     typeof photoIdOrUrl === "number" ||
     (typeof photoIdOrUrl === "string" && /^\d+$/.test(photoIdOrUrl));
@@ -146,7 +329,6 @@ export async function deletePlacePhoto(placeId, photoIdOrUrl) {
     const pid = String(photoIdOrUrl);
     return api(`/places/${placeId}/photos/${pid}`, { method: "DELETE" });
   }
-  // URLで送る（JSON）
   return api(`/places/${placeId}/delete_photo`, {
     method: "POST",
     body: { url: String(photoIdOrUrl) },
@@ -163,7 +345,7 @@ export async function restorePlace(id) {
   return api(`/places/${id}/restore`, { method: "POST" });
 }
 
-// 完全削除（管理者のみ）
+// 完全削除
 export async function hardDeletePlace(id) {
   return api(`/places/${id}/hard_delete`, { method: "DELETE" });
 }
@@ -178,7 +360,22 @@ export async function suggestMine(q, limit = 8) {
   return api(`/places/suggest_mine?${qs}`);
 }
 
-/* ===== プロフィール（互換ユーティリティ） ===== */
+/* ===== プロフィール ===== */
 export async function getMe() {
   return api(`/auth/me`);
+}
+
+/* ===== アカウント更新（新規追加） ===== */
+/**
+ * アカウント設定ページから使う想定のAPI
+ * fields: {
+ *   email?, display_name?, username?,
+ *   current_password?, password?, password_confirmation?
+ * }
+ */
+export async function updateAccount(fields) {
+  return api(`/auth`, {
+    method: "PATCH", // RegistrationsController#update が PATCH/PUT 両方OKな想定
+    body: { user: fields },
+  });
 }

@@ -2,8 +2,8 @@
 // 依存: src/lib/api.js の createPlace / createPlaceWithPhotos / getToken
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import AppHeader from "../使う、参考/components/layout/AppHeader";
-import AppFooter from "../使う、参考/components/layout/AppFooter";
+import AppHeader from "../components/layout/AppHeader";
+import AppFooter from "../components/layout/AppFooter";
 import { createPlace, createPlaceWithPhotos, getToken } from "../lib/api";
 
 export default function Post() {

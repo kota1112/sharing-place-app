@@ -33,15 +33,47 @@ Devise.setup do |config|
   # サインアウトHTTPメソッド
   config.sign_out_via = :delete
 
-  # Devise の Hotwire/Turbo 用レスポンス（Rails8 既定に合わせる）
+  # Devise の Hotwire/Turbo 用レスポンス（Rails 8 既定に合わせる）
   config.responder.error_status    = :unprocessable_entity
   config.responder.redirect_status = :see_other
+
+  # =========================================================
+  # （任意）OmniAuth Google - リダイレクト方式を使う場合のみ有効化
+  # ---------------------------------------------------------
+  # ※ Gemfile に 'omniauth' と 'omniauth-google-oauth2' が入っていない環境で
+  #   ここを実行すると起動失敗するため、厳密にガードしています。
+  #   環境変数 USE_OMNIAUTH_GOOGLE=true がセットされている時だけ有効にします。
+  #   （id_token 直投げ方式のみで運用する場合は何も設定不要）
+  # =========================================================
+  if ENV['USE_OMNIAUTH_GOOGLE'] == 'true'
+    begin
+      require 'omniauth'
+      require 'omniauth-google-oauth2'
+
+      if ENV['GOOGLE_CLIENT_ID'].present? && ENV['GOOGLE_CLIENT_SECRET'].present?
+        config.omniauth :google_oauth2,
+                        ENV['GOOGLE_CLIENT_ID'],
+                        ENV['GOOGLE_CLIENT_SECRET'],
+                        {
+                          scope:  'openid,email,profile',
+                          prompt: 'select_account',
+                          access_type: 'offline'
+                        }
+        OmniAuth.config.allowed_request_methods = %i[get post]
+      else
+        Rails.logger.warn('[Devise/OmniAuth] GOOGLE_CLIENT_ID/SECRET が未設定のため、Google連携は無効です')
+      end
+    rescue LoadError
+      Rails.logger.warn('[Devise/OmniAuth] omniauth 系 gem が見つかりません。id_token 直投げ方式のみで運用します')
+    end
+  end
 
   # =========================
   # JWT (devise-jwt) 設定
   # =========================
   # ルーティングは `scope :auth` で devise_for を宣言している前提なので、
   # サインイン/アウトのパスは /auth/sign_in, /auth/sign_out になります。
+  # さらに /auth/google（トークン直投げ方式）でもJWTを自動発行します。
   config.jwt do |jwt|
     # 本番は ENV か credentials から必ず供給すること
     secret = ENV['DEVISE_JWT_SECRET_KEY'] ||
@@ -51,9 +83,13 @@ Devise.setup do |config|
 
     jwt.secret = secret
 
-    # JWT を発行するリクエスト（ログイン）
+    # JWT を発行するリクエスト
     jwt.dispatch_requests = [
-      ['POST', %r{^/auth/sign_in$}]
+      ['POST', %r{^/auth/sign_in$}],
+      # ↓ Google の「id_token直投げ」エンドポイント（OauthController#google）
+      ['POST', %r{^/auth/google$}]
+      # ※ OmniAuth リダイレクト方式を併用する場合は、CallbacksController 側で
+      #    明示的に sign_in すればミドルウェアが付与します（ここに追加不要）
     ]
 
     # JWT を失効させるリクエスト（ログアウト）
@@ -61,7 +97,7 @@ Devise.setup do |config|
       ['DELETE', %r{^/auth/sign_out$}]
     ]
 
-    # 有効期限（フェーズ0の方針に合わせて24時間）
+    # 有効期限（既存方針：24時間）
     jwt.expiration_time = 24.hours.to_i
   end
 

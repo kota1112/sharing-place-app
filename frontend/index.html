@@ -5,6 +5,12 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
+
+    <!-- (任意) デバッグや将来の互換のため。Viteは index.html 内でも %VITE_*% を展開します -->
+    <meta name="google-signin-client_id" content="%VITE_GOOGLE_CLIENT_ID%" />
+
+    <!-- Google Identity Services (Googleログイン用) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
     <div id="root"></div>

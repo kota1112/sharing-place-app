@@ -4,9 +4,15 @@ const BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
 /* =========================
  * JWT token helpers
  * ========================= */
-export function setToken(t) { localStorage.setItem("token", t); }
-export function getToken()  { return localStorage.getItem("token"); }
-export function clearToken(){ localStorage.removeItem("token"); }
+export function setToken(t) {
+  localStorage.setItem("token", t);
+}
+export function getToken() {
+  return localStorage.getItem("token");
+}
+export function clearToken() {
+  localStorage.removeItem("token");
+}
 
 /* =========================
  * 内部ユーティリティ
@@ -21,9 +27,9 @@ function extractJwtFromResponse(res) {
 
 /* =========================
  * 共通API呼び出し
- * - JSON/Multipart 両対応（body or formData のどちらかを渡す）
+ * - JSON/Multipart 両対応
  * - Authorization: Bearer <JWT> を自動付与
- * - タイムアウト（既定 15s）
+ * - タイムアウト（15s）
  * - 204 は null
  * ========================= */
 export async function api(
@@ -34,9 +40,9 @@ export async function api(
   const token = getToken();
   const headers = { Accept: "application/json", ...(extraHeaders || {}) };
 
-  // multipart 以外は JSON として送信
   let fetchBody;
   if (formData) {
+    // multipart
     fetchBody = formData;
   } else if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -83,13 +89,6 @@ export async function api(
 
 /* =========================================================
  * Auth API
- * 既存のメール/パスワードと Google の両方をサポート
- * ルート:
- *  - POST   /auth/sign_in
- *  - DELETE /auth/sign_out
- *  - POST   /auth/google        (OauthController#google)
- *  - POST   /auth/link/google   ← 後からGoogleを紐づける
- *  - DELETE /auth/link/google   ← 紐づけたGoogleを外す
  * ========================================================= */
 
 // メール/パスワードでサインイン
@@ -165,7 +164,7 @@ export async function googleLogin(idToken) {
 
 /* ===== Google を後から紐づける／外す ===== */
 
-// 今ログインしてるユーザーのアカウントに Google を「後から」紐づける
+// 今ログインしてるユーザーに Google を紐づけ
 export async function linkGoogle(idToken) {
   const res = await fetch(`${BASE}/auth/link/google`, {
     method: "POST",
@@ -203,7 +202,7 @@ export async function unlinkGoogle() {
 
 /* ===== パスワード関連（追加） ===== */
 
-// ① 通常の「パスワード忘れた」→ Devise の PasswordsController#create に投げる想定
+// ① 通常のパスワードリセット（サーバ側の /auth/password が実装されている想定）
 export async function requestPasswordReset(email) {
   const res = await fetch(`${BASE}/auth/password`, {
     method: "POST",
@@ -221,7 +220,7 @@ export async function requestPasswordReset(email) {
   return data;
 }
 
-// ② Google連携してる人だけOKなやつ → さっき routes.rb に追加したやつ
+// ② Google連携ユーザー向けリセット（routes.rbで生やしたやつ）
 export async function requestGooglePasswordReset(email) {
   const res = await fetch(`${BASE}/auth/password/forgot_via_google`, {
     method: "POST",
@@ -234,7 +233,6 @@ export async function requestGooglePasswordReset(email) {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // サーバ側で "google_not_linked" とか返してるならここで拾える
     throw new Error(data?.error || "Reset via Google failed");
   }
   return data;
@@ -244,13 +242,40 @@ export async function requestGooglePasswordReset(email) {
  * Places API ラッパ
  * ========================================================= */
 
-// 自分の一覧
+/**
+ * 公開一覧（新）: ページネーション対応
+ * GET /places?page=1&per=50&q=...
+ * Rails 側は { data: [...], meta: { page, per, total, total_pages } } を返す
+ */
+export async function fetchPlaces({ page = 1, per = 50, q = "" } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", page);
+  params.set("per", per);
+  if (q) params.set("q", q);
+  return api(`/places?${params.toString()}`);
+}
+
+/**
+ * 自分の一覧（新）: ページネーション対応
+ * GET /places/mine?page=1&per=50&q=...
+ */
+export async function fetchMyPlaces({ page = 1, per = 50, q = "" } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", page);
+  params.set("per", per);
+  if (q) params.set("q", q);
+  return api(`/places/mine?${params.toString()}`);
+}
+
+/**
+ * 旧バージョンの呼び出しを残しておく（後方互換）
+ * 返ってくるものは配列 or {data, meta} のどちらかなので
+ * 呼び出し側が配列化して使う
+ */
 export async function getMyPlaces(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return api(`/places/mine${qs ? `?${qs}` : ""}`);
 }
-
-// 公開一覧
 export async function searchPlaces(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return api(`/places${qs ? `?${qs}` : ""}`);
@@ -271,7 +296,8 @@ export async function createPlace(payload) {
 export async function createPlaceWithPhotos(payload, files = []) {
   const fd = new FormData();
   fd.append("place[name]", payload.name ?? "");
-  if (payload.description != null) fd.append("place[description]", payload.description);
+  if (payload.description != null)
+    fd.append("place[description]", payload.description);
   [
     "address_line",
     "city",
@@ -295,10 +321,16 @@ export async function updatePlace(id, payload) {
 }
 
 // 更新＋写真（multipart）
-export async function updatePlaceWithPhotos(id, payload, files = [], removeIds = []) {
+export async function updatePlaceWithPhotos(
+  id,
+  payload,
+  files = [],
+  removeIds = []
+) {
   const fd = new FormData();
   fd.append("place[name]", payload.name ?? "");
-  if (payload.description != null) fd.append("place[description]", payload.description);
+  if (payload.description != null)
+    fd.append("place[description]", payload.description);
   [
     "address_line",
     "city",
@@ -350,14 +382,61 @@ export async function hardDeletePlace(id) {
   return api(`/places/${id}/hard_delete`, { method: "DELETE" });
 }
 
-// サジェスト
+// サジェスト（公開）
 export async function suggestAll(q, limit = 8) {
   const qs = new URLSearchParams({ q, limit }).toString();
   return api(`/places/suggest?${qs}`);
 }
+// サジェスト（自分の登録のみ）
 export async function suggestMine(q, limit = 8) {
   const qs = new URLSearchParams({ q, limit }).toString();
   return api(`/places/suggest_mine?${qs}`);
+}
+
+/* ===== マップ専用API ===== */
+/**
+ * 1) Google Maps の bounds オブジェクトをそのまま渡すとき用
+ *    const bounds = map.getBounds();
+ *    fetchPlacesForMap({ bounds, zoom: map.getZoom(), q: searchTerm })
+ */
+export async function fetchPlacesForMap({ bounds, zoom, q } = {}) {
+  const params = new URLSearchParams();
+  if (bounds) {
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    params.set("nelat", ne.lat());
+    params.set("nelng", ne.lng());
+    params.set("swlat", sw.lat());
+    params.set("swlng", sw.lng());
+  }
+  if (zoom != null) params.set("zoom", zoom);
+  if (q) params.set("q", q);
+  // マップは多くても200件くらいにする（サーバ側でさらに min してOK）
+  params.set("limit", "200");
+  return api(`/places/map?${params.toString()}`);
+}
+
+/**
+ * 2) 数値を自分で持ってるとき用（バックエンドの /places/map に合わせるだけ）
+ */
+export async function fetchPlacesForMapRaw({
+  nelat,
+  nelng,
+  swlat,
+  swlng,
+  zoom,
+  q = "",
+  limit = 200,
+} = {}) {
+  const params = new URLSearchParams();
+  if (nelat != null) params.set("nelat", nelat);
+  if (nelng != null) params.set("nelng", nelng);
+  if (swlat != null) params.set("swlat", swlat);
+  if (swlng != null) params.set("swlng", swlng);
+  if (zoom != null) params.set("zoom", zoom);
+  if (q) params.set("q", q);
+  if (limit) params.set("limit", limit);
+  return api(`/places/map?${params.toString()}`);
 }
 
 /* ===== プロフィール ===== */
@@ -365,17 +444,10 @@ export async function getMe() {
   return api(`/auth/me`);
 }
 
-/* ===== アカウント更新（新規追加） ===== */
-/**
- * アカウント設定ページから使う想定のAPI
- * fields: {
- *   email?, display_name?, username?,
- *   current_password?, password?, password_confirmation?
- * }
- */
+/* ===== アカウント更新 ===== */
 export async function updateAccount(fields) {
   return api(`/auth`, {
-    method: "PATCH", // RegistrationsController#update が PATCH/PUT 両方OKな想定
+    method: "PATCH",
     body: { user: fields },
   });
 }

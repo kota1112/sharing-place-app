@@ -108,7 +108,9 @@ export async function signIn(email, password) {
   let data = {};
   try {
     data = await res.clone().json();
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   if (!res.ok) {
     throw new Error(data?.error || data?.message || "Sign in failed");
@@ -146,7 +148,9 @@ export async function googleLogin(idToken) {
   let data = {};
   try {
     data = await res.clone().json();
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   if (!res.ok) {
     throw new Error(data?.error || data?.message || "Google login failed");

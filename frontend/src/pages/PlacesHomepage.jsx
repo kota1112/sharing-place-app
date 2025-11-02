@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import {
   api,
   fetchPlaces, // /places?page=&per=&q=... （新）をまず試す
-  getToken,     // 右上の My Page / Log in 切り替え用
+  getToken, // 右上の My Page / Log in 切り替え用
 } from "../lib/api";
 
 import SearchBar from "../components/SearchBar";
@@ -62,7 +62,7 @@ export default function PlacesHomepage() {
         let usedNewApi = true;
         try {
           res = await fetchPlaces({ page: 1, per, q: query?.trim?.() || "" });
-        } catch (_e) {
+        } catch {
           // 2. 失敗したら旧APIにフォールバックして「1ページだけ」読む
           usedNewApi = false;
           const params = new URLSearchParams();
@@ -90,7 +90,8 @@ export default function PlacesHomepage() {
           // 新API { data: [...], meta: {...} }
           nextItems = res.data;
           const meta = res.meta || {};
-          nextTotal = typeof meta.total === "number" ? meta.total : nextItems.length;
+          nextTotal =
+            typeof meta.total === "number" ? meta.total : nextItems.length;
           nextTotalPages = meta.total_pages || 1;
         } else if (res && Array.isArray(res.items)) {
           // あなたの元の想定 { items: [...], total: ... }

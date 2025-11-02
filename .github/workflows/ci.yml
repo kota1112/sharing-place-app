@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -7,7 +8,6 @@ on:
 
 jobs:
   backend:
-    name: Backend (Rails)
     runs-on: ubuntu-latest
 
     services:
@@ -20,72 +20,68 @@ jobs:
         ports:
           - "5432:5432"
         options: >-
-          --health-cmd="pg_isready -U postgres -d sharing_place_app_test"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    defaults:
-      run:
-        working-directory: ./backend
+          --health-cmd "pg_isready -U postgres -d sharing_place_app_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       RAILS_ENV: test
       # database.yml の test: に合わせる
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/sharing_place_app_test
-      # devise-jwt などで必要になるのでダミーを入れておく
+      # devise-jwt が初期化で見るのでダミーを入れておく
       DEVISE_JWT_SECRET_KEY: dummy_jwt_secret_for_ci
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install system deps (PostgreSQL client headers)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpq-dev
-
+      # Ruby 本体を入れる
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.3.4" # ローカルと合わせる
-          bundler-cache: true
+          ruby-version: "3.3.4"
 
+      # ← ここが今回足りなかったところ！
+      # リポジトリの root ではなく backend/ の Gemfile を使って bundle install する
+      - name: Install gems
+        working-directory: backend
+        run: |
+          bundle install --jobs 4 --retry 3
+
+      # DBをつくる（db/schema.rb があればそれで、なければ migrate される）
       - name: Prepare database
+        working-directory: backend
         run: |
           bin/rails db:prepare
 
+      # Rails のテスト（今は rails test、あとで rspec に替えてOK）
       - name: Run tests
+        working-directory: backend
         run: |
-          bin/rails test
+          bundle exec rails test
 
   frontend:
-    name: Frontend (Vite/React)
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: ./frontend
-
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "24.x"
-          cache: "npm"
-          cache-dependency-path: ./frontend/package-lock.json
+          # 今の手元が 24 だけど、Actions の安定版で 20 にしておく
+          node-version: "20"
 
       - name: Install deps
+        working-directory: frontend
         run: npm ci
 
       - name: Lint
+        working-directory: frontend
         run: npm run lint
 
       - name: Build
+        working-directory: frontend
         run: npm run build
-
-
-        

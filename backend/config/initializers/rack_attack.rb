@@ -1,29 +1,42 @@
 # config/initializers/rack_attack.rb
+
+# ここでクラスを開くことで Rails 起動時に一度だけ設定される
 class Rack::Attack
-  # 1 IP あたり1分に30回までログイン試行
+  # ===============================
+  # 1. 認証まわりのレート制限
+  # ===============================
+
+  # 1IPあたり /auth/sign_in を1分で30回まで
   throttle("logins/ip", limit: 30, period: 60.seconds) do |req|
-    if req.path.start_with?("/auth/sign_in") && req.post?
+    if req.post? && req.path.start_with?("/auth/sign_in")
       req.ip
     end
   end
 
-  # Googleログインも制限
+  # 1IPあたり Google系のエンドポイントを1分で30回まで
+  # あなたのアプリには
+  #   - /auth/google        (自前APIでGoogleを叩く)
+  #   - /auth/google_oauth2 (devise-omniauthの典型)
+  # の両方があり得るので両方をまとめて見る
   throttle("logins_google/ip", limit: 30, period: 60.seconds) do |req|
-    # /auth/google でも /auth/google_oauth2 でも拾えるようにしておく
-    if req.post? && (req.path.start_with?("/auth/google") || req.path.start_with?("/auth/google_oauth2"))
+    if req.post? &&
+       (req.path.start_with?("/auth/google") ||
+        req.path.start_with?("/auth/google_oauth2"))
       req.ip
     end
   end
 
-  # ソーシャル紐付けも制限（悪用防止）
+  # ソーシャルの紐付けAPIも1分で30回まで
   throttle("link_google/ip", limit: 30, period: 60.seconds) do |req|
     if req.path.start_with?("/auth/link/google")
       req.ip
     end
   end
 
-  # Rack::Attack 6.0 以降は throttled_response が deprecated なので
-  # CI で毎回出てた警告を消す用
+  # ===============================
+  # 2. 429レスポンスの共通化
+  # ===============================
+  # Rack::Attack 6系の新しいやり方
   self.throttled_responder = lambda do |_req|
     [
       429,
@@ -32,7 +45,7 @@ class Rack::Attack
     ]
   end
 
-  # 互換のために残しておいても害はない（古いバージョンでも動くように）
+  # 古いバージョン互換（あっても害はない）
   self.throttled_response = lambda do |_env|
     [
       429,

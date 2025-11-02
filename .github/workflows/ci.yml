@@ -12,7 +12,8 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # あなたのローカルに合わせて 18
+        image: postgres:18
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -27,39 +28,40 @@ jobs:
 
     env:
       RAILS_ENV: test
-      # database.yml の test: に合わせる
+      # backend/config/database.yml の test: に合わせる
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/sharing_place_app_test
       # devise-jwt が初期化で見るのでダミーを入れておく
       DEVISE_JWT_SECRET_KEY: dummy_jwt_secret_for_ci
+      # Rails が起動時に要求するのでダミーでOK
+      SECRET_KEY_BASE: dummy_secret_key_base
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # Ruby 本体を入れる
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3.4"
 
-      # ← ここが今回足りなかったところ！
-      # リポジトリの root ではなく backend/ の Gemfile を使って bundle install する
+      # backend/ の Gemfile を見ることを明示
       - name: Install gems
         working-directory: backend
-        run: |
-          bundle install --jobs 4 --retry 3
+        run: bundle install --jobs 4 --retry 3
 
-      # DBをつくる（db/schema.rb があればそれで、なければ migrate される）
+      # structure.sql を読ませると落ちるので、テストDBを作り直して schema.rb を読む
       - name: Prepare database
         working-directory: backend
+        env:
+          RAILS_ENV: test
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/sharing_place_app_test
         run: |
-          bin/rails db:prepare
+          bin/rails db:drop db:create
+          bin/rails db:schema:load --trace
 
-      # Rails のテスト（今は rails test、あとで rspec に替えてOK）
       - name: Run tests
         working-directory: backend
-        run: |
-          bundle exec rails test
+        run: bundle exec rails test
 
   frontend:
     runs-on: ubuntu-latest
@@ -71,7 +73,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          # 今の手元が 24 だけど、Actions の安定版で 20 にしておく
+          # Actions で安定してるので 20
           node-version: "20"
 
       - name: Install deps

@@ -3,28 +3,35 @@ import js from "@eslint/js";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  // ビルド成果物は無視
-  globalIgnores(["dist", "node_modules", ".vite"]),
+  // ここで「自分自身」も含めて ESLint に見せたくないものを全部外す
+  // ※これを入れないと eslint.config.js 自体を ESLint が読んで
+  //   「import があるけどここは CommonJS だと思ってるよ？」って怒る
+  globalIgnores(["dist", "node_modules", ".vite", "eslint.config.js"]),
   {
     files: ["**/*.{js,jsx}"],
+    plugins: {
+      "jsx-a11y": jsxA11y,
+    },
     extends: [
       js.configs.recommended,
       // React Hooks の最新ルール
       reactHooks.configs["recommended-latest"],
-      // Vite 用の fast refresh
+      // Vite の Fast Refresh 用
       reactRefresh.configs.vite,
+      // a11y（Post.jsx で怒られていたやつ）
+      jsxA11y.flatConfigs.recommended,
     ],
     languageOptions: {
       ecmaVersion: 2020,
-      // ブラウザ + Vite で使ってるものをグローバルにしておく
       globals: {
         ...globals.browser,
-        // Vite の設定ファイルや一部コードで使っていたので追加
+        // あなたのコードで使っているので全部 readonly で許可
         process: "readonly",
-        // 念のため
+        import.meta: "readonly",
         globalThis: "readonly",
       },
       parserOptions: {
@@ -34,10 +41,10 @@ export default defineConfig([
       },
     },
     rules: {
-      // いまのコードにある「空の {}」を許可（lib/api.js とか）
+      // lib/api.js などの空ブロックをそのまま通す
       "no-empty": "off",
 
-      // 使ってない変数で落とさない。大文字や _ で始まるものは無視。
+      // 未使用変数は warning に落とす（大文字・_ 始まりは無視）
       "no-unused-vars": [
         "warn",
         {
@@ -47,8 +54,11 @@ export default defineConfig([
         },
       ],
 
-      // CI が「このルールが無い」と言っていたので明示的にオフ
+      // CI で「このルールが無い」となっていたので、ここでは無効化しておく
       "jsx-a11y/img-redundant-alt": "off",
+
+      // vite.config.js で `process` を触っても「再定義」と言われないように
+      "no-redeclare": ["error", { builtinGlobals: false }],
     },
   },
 ]);

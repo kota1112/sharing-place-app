@@ -13,19 +13,20 @@ export default function GoogleSignInButton({ onSuccess }) {
 
     const handleCredential = async (resp) => {
       if (!resp?.credential) return;
+
       try {
         // サーバーへ id_token を渡してログイン/サインアップ
         const { data, auth } = await googleLogin(resp.credential);
 
-        // Authorization: Bearer ... が返る想定なのでトークンにセット
+        // "Authorization: Bearer xxx" の想定なのでトークンだけ抜く
         if (auth) {
           setToken(auth.replace(/^Bearer\s+/i, ""));
         }
 
-        // 親コンポーネントに「成功したよ」を伝える
+        // 呼び出し元に成功を知らせる
         onSuccess?.(data?.user || data);
       } catch (e) {
-        // eslint-disable-next-line no-alert
+        // 今回はシンプルに alert のまま
         alert(
           "Googleログインに失敗しました: " + (e?.message || String(e || ""))
         );
@@ -41,7 +42,7 @@ export default function GoogleSignInButton({ onSuccess }) {
       context: "use",
     });
 
-    // ボタンを描画
+    // ボタン描画
     g.renderButton(btnRef.current, {
       theme: "outline",
       size: "large",
@@ -51,7 +52,7 @@ export default function GoogleSignInButton({ onSuccess }) {
       width: 280,
     });
 
-    // クリーンアップ（StrictMode 二重実行対策）
+    // StrictMode などで2回呼ばれても安全にする
     return () => {
       try {
         g.cancel?.();
@@ -60,7 +61,7 @@ export default function GoogleSignInButton({ onSuccess }) {
         // noop
       }
     };
-  }, [clientId, onSuccess]); // ← ここを入れておくと eslint の warning が消える
+  }, [clientId, onSuccess]);
 
   return <div ref={btnRef} />;
 }

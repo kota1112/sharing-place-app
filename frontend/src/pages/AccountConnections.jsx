@@ -80,7 +80,9 @@ export default function AccountConnections({ embedded = false }) {
     return () => {
       try {
         g.cancel();
-      } catch {}
+      } catch {
+        // ignore
+      }
     };
   }, [isLinked]);
 

@@ -1,3 +1,5 @@
+// src/pages/Post.jsx
+
 // 新規投稿ページ（/place/new 想定）
 // 依存: src/lib/api.js の createPlace / createPlaceWithPhotos / getToken
 
@@ -165,8 +167,14 @@ export default function Post() {
             {/* 基本情報 */}
             <section className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-600">Name *</label>
+                <label
+                  htmlFor="place-name"
+                  className="block text-sm text-gray-600"
+                >
+                  Name *
+                </label>
                 <input
+                  id="place-name"
                   type="text"
                   required
                   value={name}
@@ -177,8 +185,14 @@ export default function Post() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-600">Description</label>
+                <label
+                  htmlFor="place-description"
+                  className="block text-sm text-gray-600"
+                >
+                  Description
+                </label>
                 <textarea
+                  id="place-description"
                   ref={descRef}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -192,8 +206,14 @@ export default function Post() {
             {/* 住所 */}
             <section className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-600">Address line</label>
+                <label
+                  htmlFor="place-address-line"
+                  className="block text-sm text-gray-600"
+                >
+                  Address line
+                </label>
                 <input
+                  id="place-address-line"
                   type="text"
                   value={addressLine}
                   onChange={(e) => setAddressLine(e.target.value)}
@@ -204,8 +224,14 @@ export default function Post() {
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm text-gray-600">City</label>
+                  <label
+                    htmlFor="place-city"
+                    className="block text-sm text-gray-600"
+                  >
+                    City
+                  </label>
                   <input
+                    id="place-city"
                     type="text"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
@@ -213,8 +239,14 @@ export default function Post() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600">State</label>
+                  <label
+                    htmlFor="place-state"
+                    className="block text-sm text-gray-600"
+                  >
+                    State
+                  </label>
                   <input
+                    id="place-state"
                     type="text"
                     value={state}
                     onChange={(e) => setState(e.target.value)}
@@ -222,8 +254,14 @@ export default function Post() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600">Postal code</label>
+                  <label
+                    htmlFor="place-postal-code"
+                    className="block text-sm text-gray-600"
+                  >
+                    Postal code
+                  </label>
                   <input
+                    id="place-postal-code"
                     type="text"
                     value={postalCode}
                     onChange={(e) => setPostalCode(e.target.value)}
@@ -231,8 +269,14 @@ export default function Post() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600">Country</label>
+                  <label
+                    htmlFor="place-country"
+                    className="block text-sm text-gray-600"
+                  >
+                    Country
+                  </label>
                   <input
+                    id="place-country"
                     type="text"
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
@@ -243,8 +287,14 @@ export default function Post() {
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm text-gray-600">Latitude</label>
+                  <label
+                    htmlFor="place-latitude"
+                    className="block text-sm text-gray-600"
+                  >
+                    Latitude
+                  </label>
                   <input
+                    id="place-latitude"
                     type="number"
                     step="any"
                     value={latitude}
@@ -253,8 +303,14 @@ export default function Post() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600">Longitude</label>
+                  <label
+                    htmlFor="place-longitude"
+                    className="block text-sm text-gray-600"
+                  >
+                    Longitude
+                  </label>
                   <input
+                    id="place-longitude"
                     type="number"
                     step="any"
                     value={longitude}
@@ -268,8 +324,14 @@ export default function Post() {
             {/* 連絡/URL/ステータス */}
             <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-sm text-gray-600">Phone</label>
+                <label
+                  htmlFor="place-phone"
+                  className="block text-sm text-gray-600"
+                >
+                  Phone
+                </label>
                 <input
+                  id="place-phone"
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -277,8 +339,14 @@ export default function Post() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Website URL</label>
+                <label
+                  htmlFor="place-website-url"
+                  className="block text-sm text-gray-600"
+                >
+                  Website URL
+                </label>
                 <input
+                  id="place-website-url"
                   type="url"
                   value={websiteUrl}
                   onChange={(e) => setWebsiteUrl(e.target.value)}
@@ -287,8 +355,14 @@ export default function Post() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Status</label>
+                <label
+                  htmlFor="place-status"
+                  className="block text-sm text-gray-600"
+                >
+                  Status
+                </label>
                 <input
+                  id="place-status"
                   type="text"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
@@ -300,15 +374,23 @@ export default function Post() {
 
             {/* 写真（複数可） */}
             <section className="space-y-2">
-              <label className="block text-sm text-gray-600">Photos</label>
+              <label
+                htmlFor="place-photos"
+                className="block text-sm text-gray-600"
+              >
+                Photos
+              </label>
               <div className="flex flex-wrap gap-3">
                 {previews.map((p, idx) => (
                   <div
                     key={`${p.name}-${idx}`}
                     className="relative h-24 w-32 overflow-hidden rounded-md border"
                   >
-                    {/* eslint-disable-next-line jsx-a11y/img-redundant-alt */}
-                    <img src={p.url} alt={`photo ${idx + 1}`} className="h-full w-full object-cover" />
+                    <img
+                      src={p.url}
+                      alt={`photo ${idx + 1}`}
+                      className="h-full w-full object-cover"
+                    />
                     <button
                       type="button"
                       onClick={() => removeFileByIndex(idx)}
@@ -326,6 +408,7 @@ export default function Post() {
                   + Add
                 </button>
                 <input
+                  id="place-photos"
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"

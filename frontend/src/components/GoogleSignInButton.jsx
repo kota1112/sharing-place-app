@@ -1,36 +1,67 @@
+// src/components/GoogleSignInButton.jsx
 import { useEffect, useRef } from "react";
-import { setToken } from "../lib/api";
-import { googleLogin } from "../lib/api";
+import { setToken, googleLogin } from "../lib/api";
 
 export default function GoogleSignInButton({ onSuccess }) {
   const btnRef = useRef(null);
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   useEffect(() => {
-    if (!window.google || !clientId || !btnRef.current) return;
+    // GIS がまだ来てない / env がない / ボタンDOMがないなら何もしない
+    const g = window.google?.accounts?.id;
+    if (!g || !clientId || !btnRef.current) return;
 
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: async (resp) => {
-        try {
-          const { data, auth } = await googleLogin(resp.credential);
-          if (auth) setToken(auth.replace("Bearer ", ""));
-          onSuccess?.(data?.user);
-        } catch (e) {
-          alert("Googleログインに失敗しました: " + (e.message || e));
+    const handleCredential = async (resp) => {
+      if (!resp?.credential) return;
+
+      try {
+        // サーバーへ id_token を渡してログイン/サインアップ
+        const { data, auth } = await googleLogin(resp.credential);
+
+        // "Authorization: Bearer xxx" の想定なのでトークンだけ抜く
+        if (auth) {
+          setToken(auth.replace(/^Bearer\s+/i, ""));
         }
-      },
-      ux_mode: "popup" // or 'redirect'
+
+        // 呼び出し元に成功を知らせる
+        onSuccess?.(data?.user || data);
+      } catch (e) {
+        // 今回はシンプルに alert のまま
+        alert(
+          "Googleログインに失敗しました: " + (e?.message || String(e || ""))
+        );
+      }
+    };
+
+    // 初期化
+    g.initialize({
+      client_id: clientId,
+      callback: handleCredential,
+      ux_mode: "popup",
+      auto_select: false,
+      context: "use",
     });
-    window.google.accounts.id.renderButton(btnRef.current, {
+
+    // ボタン描画
+    g.renderButton(btnRef.current, {
       theme: "outline",
       size: "large",
       text: "continue_with",
       shape: "pill",
       logo_alignment: "left",
-      width: 280
+      width: 280,
     });
-  }, [clientId]);
+
+    // StrictMode などで2回呼ばれても安全にする
+    return () => {
+      try {
+        g.cancel?.();
+        g.disableAutoSelect?.();
+      } catch {
+        // noop
+      }
+    };
+  }, [clientId, onSuccess]);
 
   return <div ref={btnRef} />;
 }

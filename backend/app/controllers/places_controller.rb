@@ -3,7 +3,7 @@ class PlacesController < ApplicationController
   include Rails.application.routes.url_helpers
 
   # 公開で見せるのは index / show / suggest / map
-  # （自分のサジェストはログイン必須なので除外しない）
+  # それ以外は認証必須
   before_action :authenticate_user!, except: %i[index show suggest map]
 
   # show は ?include_deleted=1 を考慮するので専用で取得
@@ -137,7 +137,6 @@ class PlacesController < ApplicationController
   #   q                           ... 検索キーワード
   #   limit                       ... 最大件数（サーバ側でも上限を掛ける）
   def map
-    # 1. パラメータ取得
     nelat = params[:nelat].to_f
     nelng = params[:nelng].to_f
     swlat = params[:swlat].to_f
@@ -147,32 +146,27 @@ class PlacesController < ApplicationController
     limit = params[:limit].to_i
     max_limit = 300
     limit = max_limit  if limit <= 0
-    limit = max_limit  if limit > max_limit 
+    limit = max_limit  if limit > max_limit
 
-    # 2. ベーススコープ（公開＋未削除）
-    #    Place.kept があるならそれを使う。なければ deleted_at: nil で。
+    # 公開＋未削除
     scope = if Place.respond_to?(:kept)
               Place.kept
             else
               Place.where(deleted_at: nil)
             end
 
-    # 3. キーワード
     scope = apply_text_search(scope, params[:q].to_s.strip) if params[:q].present?
 
-    # 4. ビューポートで絞る
-    # 経度が日付変更線をまたぐケースは今回はシンプルに2パターンで対応
+    # ビューポートで絞る
     if nelng >= swlng
-      # 通常の矩形
       scope = scope.where(latitude: swlat..nelat)
                    .where(longitude: swlng..nelng)
     else
-      # 180度またぎ → 2本に分けて OR
+      # 180度またぎ
       scope = scope.where(latitude: swlat..nelat)
                    .where("(longitude >= :swlng OR longitude <= :nelng)", swlng: swlng, nelng: nelng)
     end
 
-    # 5. ズームに応じて粒度を変えるのは後でやるとして、今は素直に返す
     places = scope.limit(limit)
 
     render json: {
@@ -199,7 +193,14 @@ class PlacesController < ApplicationController
     q = params[:q].to_s.strip
     return render json: [] if q.blank?
 
-    suggestions = build_suggestions(Place.all, q, limit: params[:limit])
+    # 公開サジェストは「生きているものだけ」
+    base = if Place.respond_to?(:kept)
+             Place.kept
+           else
+             Place.where(deleted_at: nil)
+           end
+
+    suggestions = build_suggestions(base, q, limit: params[:limit])
     render json: suggestions
   end
 
@@ -290,23 +291,32 @@ class PlacesController < ApplicationController
   def base_scope_for_index
     if params[:only_deleted].present?
       authorize_admin!
-      Place.only_deleted
+      Place.unscoped.where.not(deleted_at: nil)
     elsif params[:with_deleted].present?
       authorize_admin!
-      Place.with_deleted
+      Place.unscoped
     else
-      Place.all
+      # 公開は未削除だけ
+      if Place.respond_to?(:kept)
+        Place.kept
+      else
+        Place.where(deleted_at: nil)
+      end
     end
   end
 
   def base_scope_for_mine
     base =
       if params[:only_deleted].present?
-        Place.only_deleted
+        Place.unscoped.where.not(deleted_at: nil)
       elsif params[:with_deleted].present?
-        Place.with_deleted
+        Place.unscoped
       else
-        Place.all
+        if Place.respond_to?(:kept)
+          Place.kept
+        else
+          Place.where(deleted_at: nil)
+        end
       end
 
     base.where(author_id: current_user.id)
@@ -315,17 +325,17 @@ class PlacesController < ApplicationController
   # --- Auth helpers --------------------------------------------------
 
   def authorize_owner!(place)
-    allowed = current_user && (place.author_id == current_user.id || current_user.role == 'admin')
+    allowed = current_user && (place.author_id == current_user.id || current_user.role == "admin")
     head :forbidden unless allowed
   end
 
   def authorize_admin!
-    head :forbidden unless current_user&.role == 'admin'
+    head :forbidden unless current_user&.role == "admin"
   end
 
   def can_view_deleted_record?(place)
     return true unless place.deleted_at.present?
-    return true if current_user&.role == 'admin'
+    return true if current_user&.role == "admin"
     current_user && place.author_id == current_user.id
   end
 
@@ -442,13 +452,13 @@ class PlacesController < ApplicationController
   # SQLite/MySQL では LIKE フォールバック
   def apply_text_search(scope, q)
     adapter   = ActiveRecord::Base.connection.adapter_name.downcase
-    is_pg     = adapter.include?('postgres')
-    is_sqlite = adapter.include?('sqlite')
+    is_pg     = adapter.include?("postgres")
+    is_sqlite = adapter.include?("sqlite")
 
     if is_pg
-      has_cached   = Place.column_names.include?('full_address_cached')
+      has_cached   = Place.column_names.include?("full_address_cached")
       address_expr = if has_cached
-                       'places.full_address_cached'
+                       "places.full_address_cached"
                      else
                        "concat_ws(' ', places.address_line, places.city, places.state, places.postal_code, places.country)"
                      end
@@ -516,7 +526,7 @@ class PlacesController < ApplicationController
       where_sql << "#{desc_col} LIKE ?";  binds << pattern
       where_sql << "#{concat_sql} LIKE ?"; binds << pattern
 
-      scope.where(where_sql.join(' OR '), *binds)
+      scope.where(where_sql.join(" OR "), *binds)
     end
   end
 
@@ -526,13 +536,13 @@ class PlacesController < ApplicationController
     lim = limit.present? ? limit.to_i.clamp(1, 20) : 8
 
     adapter   = ActiveRecord::Base.connection.adapter_name.downcase
-    is_pg     = adapter.include?('postgres')
-    is_sqlite = adapter.include?('sqlite')
+    is_pg     = adapter.include?("postgres")
+    is_sqlite = adapter.include?("sqlite")
 
     if is_pg
-      has_cached   = Place.column_names.include?('full_address_cached')
+      has_cached   = Place.column_names.include?("full_address_cached")
       address_expr = if has_cached
-                       'places.full_address_cached'
+                       "places.full_address_cached"
                      else
                        "concat_ws(' ', places.address_line, places.city, places.state, places.postal_code, places.country)"
                      end

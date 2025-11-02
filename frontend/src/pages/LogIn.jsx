@@ -72,7 +72,9 @@ export default function LogIn() {
       try {
         window.google?.accounts?.id?.disableAutoSelect?.();
         window.google?.accounts?.id?.cancel?.();
-      } catch {}
+      } catch {
+        // ignore
+      }
     };
   }, []);
 
@@ -107,7 +109,9 @@ export default function LogIn() {
             data?.error ||
             data?.message ||
             msg;
-        } catch {}
+        } catch {
+          // ignore
+        }
         throw new Error(msg);
       }
 

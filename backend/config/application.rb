@@ -20,9 +20,11 @@ module Backend
     # PostgreSQL拡張（pg_trgm など）をschema.rbで落とさないためにSQLで保存
     config.active_record.schema_format = :sql
 
-    # Only loads a smaller set of middleware suitable for API only apps.
-    # Middleware like session, flash, cookies can be added back manually.
-    # Skip views, helpers and assets when generating a new resource.
+    # APIモード
     config.api_only = true
+
+    # 💡 ここで rack-attack を有効にする
+    # （config.api_only = true でも明示的に追加すれば使える）
+    config.middleware.use Rack::Attack
   end
 end

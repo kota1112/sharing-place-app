@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { ensureMaps } from "../../lib/maps";
 import { fetchPlacesForMap } from "../../lib/api";
 
+// Vite ではブラウザ側からは import.meta.env.* を使う
 const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
 
 /** geolocation を1回だけ試す（Promiseラップ） */
@@ -303,8 +304,8 @@ export default function MapView({ items = [] }) {
           null;
 
         if (!MC) {
-          // ライブラリがなかったら素で置く
-          if (process.env.NODE_ENV !== "production") {
+          // ブラウザ環境では process はないので Vite のフラグを使う
+          if (import.meta.env && import.meta.env.DEV) {
             console.warn(
               "[MapView] MarkerClusterer が見つからないので素の Marker で表示します。main.jsx に `window.MarkerClusterer = MarkerClusterer` を書いたか確認してください。"
             );

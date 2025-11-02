@@ -66,7 +66,9 @@ export default function SignUp() {
       try {
         window.google?.accounts?.id?.disableAutoSelect?.();
         window.google?.accounts?.id?.cancel?.();
-      } catch {}
+      } catch {
+        // ignore
+      }
     };
   }, []);
 
@@ -97,7 +99,9 @@ export default function SignUp() {
         try {
           const data = await res.json();
           msg = data?.errors?.join("\n") || data?.error || msg;
-        } catch {}
+        } catch {
+          // ignore
+        }
         throw new Error(msg);
       }
 

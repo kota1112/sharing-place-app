@@ -9,12 +9,15 @@ import PlaceNew from "./pages/PlaceNew.jsx";
 import LogIn from "./pages/LogIn.jsx";
 import PlacesIndex from "./pages/PlacesIndex.jsx";
 import PlaceDetail from "./pages/PlaceDetail.jsx";
-import MyPage from "./pages/MyPage.jsx";
+
 import PlaceEditPage from "./pages/PlaceEditPage.jsx";
 import SignUp from "./pages/SignUp.jsx";
 import Post from "./pages/Post.jsx";
 import AccountConnections from "./pages/AccountConnections.jsx";
 import AccountSettings from "./pages/AccountSettings.jsx";
+import MyPage from "./components/forMypage/MyPage.jsx";
+
+
 
 /**
  * 方法B: パッケージを入れずに CDN から markerclusterer を読む

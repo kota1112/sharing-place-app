@@ -1,6 +1,7 @@
+# app/models/place.rb
 class Place < ApplicationRecord
   # --- Associations ---
-  belongs_to :author, class_name: 'User', optional: true
+  belongs_to :author, class_name: "User", optional: true
   has_many_attached :photos
 
   # --- Normalization ---
@@ -20,9 +21,13 @@ class Place < ApplicationRecord
             allow_nil: true
 
   validates :website_url, length: { maximum: 2048 }, allow_blank: true
-  validates :phone, length: { maximum: 100 }, allow_blank: true
+  validates :phone,       length: { maximum: 100 },   allow_blank: true
+
+  # 添付ファイルの安全チェック（今回追加）
+  validate :acceptable_photos
 
   # --- Soft Delete ---
+  # これがある前提で controller 側は unscoped/with_deleted を呼んでいたので残す
   default_scope { where(deleted_at: nil) }
   scope :with_deleted, -> { unscope(where: :deleted_at) }
   scope :only_deleted, -> { unscoped.where.not(deleted_at: nil) }
@@ -33,7 +38,7 @@ class Place < ApplicationRecord
 
   # --- Helpers: Address ---
   def full_address
-    [address_line, city, state, postal_code, country].compact_blank.join(' ')
+    [address_line, city, state, postal_code, country].compact_blank.join(" ")
   end
 
   # フロント互換（full_address と同じ）
@@ -47,7 +52,7 @@ class Place < ApplicationRecord
     next all if q.blank?
 
     adapter = ActiveRecord::Base.connection.adapter_name.downcase
-    if adapter.include?('postgres')
+    if adapter.include?("postgres")
       like = "%#{ActiveRecord::Base.sanitize_sql_like(q)}%"
       where(<<~SQL.squish, p: like)
         places.name ILIKE :p
@@ -74,6 +79,29 @@ class Place < ApplicationRecord
 
   private
 
+  # --- ActiveStorage validation (added) ---
+  #
+  # ファイル・写真のバッファオーバーフロー対策：
+  # - サイズを 10MB に制限
+  # - 画像系のMIMEだけ許可
+  def acceptable_photos
+    return unless photos.attached?
+
+    max_size_mb    = 10
+    max_size_bytes = max_size_mb.megabytes
+    allowed_types  = %w[image/jpeg image/png image/webp image/jpg]
+
+    photos.each do |photo|
+      if photo.byte_size > max_size_bytes
+        errors.add(:photos, "is too big (max #{max_size_mb}MB)")
+      end
+
+      unless allowed_types.include?(photo.content_type)
+        errors.add(:photos, "must be JPEG, PNG, or WebP")
+      end
+    end
+  end
+
   # --- Normalizers ---
   def strip_strings
     %i[name description address_line city state postal_code country phone website_url].each do |attr|
@@ -93,12 +121,12 @@ class Place < ApplicationRecord
     return unless defined?(GeocoderService) && GeocoderService.respond_to?(:google_geocode)
 
     if (res = GeocoderService.google_geocode(full_address))
-      self.latitude        = res[:lat]
-      self.longitude       = res[:lng]
-      self.google_place_id = res[:place_id] if respond_to?(:google_place_id)
-      self.geocoded_at     = Time.current if respond_to?(:geocoded_at)
+      self.latitude         = res[:lat]
+      self.longitude        = res[:lng]
+      self.google_place_id  = res[:place_id] if respond_to?(:google_place_id)
+      self.geocoded_at      = Time.current   if respond_to?(:geocoded_at)
       self.geocode_provider = safe_geocode_config(:provider_name)
-      self.geocode_permitted = true if respond_to?(:geocode_permitted)
+      self.geocode_permitted = true          if respond_to?(:geocode_permitted)
       self.geocode_terms_version = safe_geocode_config(:terms_version)
     end
   rescue => e

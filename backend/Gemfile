@@ -68,3 +68,10 @@ gem "pg", "~> 1.6"
 gem 'discard', '~> 1.2'
 
 gem "google-id-token"
+
+
+# セキュリティヘッダ
+gem "secure_headers"
+
+# レート制限
+gem "rack-attack"

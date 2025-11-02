@@ -7,9 +7,9 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  // ここで「自分自身」も含めて ESLint に見せたくないものを全部外す
-  // ※これを入れないと eslint.config.js 自体を ESLint が読んで
-  //   「import があるけどここは CommonJS だと思ってるよ？」って怒る
+  // ここで「自分自身」を含めて ESLint に見せたくないものを全部外す
+  // これがないと eslint.config.js 自体を ESLint が読んで
+  // 「import があるけど CJS として読んでるよ？」ってなる
   globalIgnores(["dist", "node_modules", ".vite", "eslint.config.js"]),
   {
     files: ["**/*.{js,jsx}"],
@@ -18,20 +18,17 @@ export default defineConfig([
     },
     extends: [
       js.configs.recommended,
-      // React Hooks の最新ルール
-      reactHooks.configs["recommended-latest"],
-      // Vite の Fast Refresh 用
-      reactRefresh.configs.vite,
-      // a11y（Post.jsx で怒られていたやつ）
-      jsxA11y.flatConfigs.recommended,
+      reactHooks.configs["recommended-latest"], // React Hooks
+      reactRefresh.configs.vite, // Vite fast refresh
+      jsxA11y.flatConfigs.recommended, // a11y
     ],
     languageOptions: {
       ecmaVersion: 2020,
       globals: {
         ...globals.browser,
-        // あなたのコードで使っているので全部 readonly で許可
+        // ここがポイント：ドット入りはクォートする
         process: "readonly",
-        import.meta: "readonly",
+        "import.meta": "readonly",
         globalThis: "readonly",
       },
       parserOptions: {
@@ -41,10 +38,10 @@ export default defineConfig([
       },
     },
     rules: {
-      // lib/api.js などの空ブロックをそのまま通す
+      // いまの実装にある空ブロックを壊さない
       "no-empty": "off",
 
-      // 未使用変数は warning に落とす（大文字・_ 始まりは無視）
+      // 未使用変数は warning、大文字・_ 始まりは無視
       "no-unused-vars": [
         "warn",
         {
@@ -54,10 +51,10 @@ export default defineConfig([
         },
       ],
 
-      // CI で「このルールが無い」となっていたので、ここでは無効化しておく
+      // Post.jsx で出たけど今回は無効化
       "jsx-a11y/img-redundant-alt": "off",
 
-      // vite.config.js で `process` を触っても「再定義」と言われないように
+      // vite.config.js での process とかを再定義扱いにしない
       "no-redeclare": ["error", { builtinGlobals: false }],
     },
   },

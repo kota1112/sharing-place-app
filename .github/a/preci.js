@@ -8,12 +8,11 @@ on:
 
 jobs:
   backend:
-    name: Backend (Rails)
     runs-on: ubuntu-latest
 
     services:
       postgres:
-        # あなたの元の設定を尊重して 18 のまま
+        # あなたのローカルに合わせて 18
         image: postgres:18
         env:
           POSTGRES_USER: postgres
@@ -21,7 +20,6 @@ jobs:
           POSTGRES_DB: sharing_place_app_test
         ports:
           - "5432:5432"
-        # 起動待ちも元のまま。DB名に合わせてあるのでここも変えない
         options: >-
           --health-cmd "pg_isready -U postgres -d sharing_place_app_test"
           --health-interval 10s
@@ -45,22 +43,13 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3.4"
-          # キャッシュを有効化して bundle install を速くする
-          bundler-cache: true
-          # backend/Gemfile を読ませるための指定は下の step でやる
 
-      # libvips がないと ActiveStorage の variant が落ちるケースがあるので先に入れておく
-      - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libvips42 || true
-
-      # backend/ の Gemfile を見ることを明示（元のロジックを維持）
+      # backend/ の Gemfile を見ることを明示
       - name: Install gems
         working-directory: backend
         run: bundle install --jobs 4 --retry 3
 
-      # structure.sql を読ませると落ちるので、テストDBを作り直して schema.rb を読む（元のロジックを維持）
+      # structure.sql を読ませると落ちるので、テストDBを作り直して schema.rb を読む
       - name: Prepare database
         working-directory: backend
         env:
@@ -72,19 +61,10 @@ jobs:
 
       - name: Run tests
         working-directory: backend
-        env:
-          RAILS_ENV: test
         run: bundle exec rails test
 
   frontend:
-    name: Frontend (Vite / React)
     runs-on: ubuntu-latest
-    # バックエンドが通ってから実行したいので依存させる（壊さずに追加）
-    needs: backend
-
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - name: Checkout repo
@@ -93,19 +73,17 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          # 元の意図どおり Node 20
+          # Actions で安定してるので 20
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Install deps
+        working-directory: frontend
         run: npm ci
 
       - name: Lint
+        working-directory: frontend
         run: npm run lint
 
       - name: Build
+        working-directory: frontend
         run: npm run build
-        env:
-          # ビルド時に必要ならここでAPI_BASEを注入
-          VITE_API_BASE: "http://localhost:3000"

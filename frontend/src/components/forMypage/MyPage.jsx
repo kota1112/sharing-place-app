@@ -2,20 +2,20 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 
-import AppHeader from "../components/layout/AppHeader";
-import AppFooter from "../components/layout/AppFooter";
-import SearchBar from "../components/SearchBar";
+import AppHeader from "../layout/AppHeader";
+import AppFooter from "../layout/AppFooter";
+import SearchBar from "../SearchBar";
 
-import MyPlacesList from "../components/forMypage/MyPlacesList";
-import MyPlacesGrid from "../components/forMypage/MyPlacesGrid";
-import MyPlacesMap from "../components/forMypage/MyPlacesMap";
+import MyPlacesList from "./MyPlacesList";
+import MyPlacesGrid from "./MyPlacesGrid";
+import MyPlacesMap from "./MyPlacesMap";
 
 import {
   api,
   fetchMyPlaces,        // ← ページネーション対応版
   deletePlaceSoft,
   getToken,
-} from "../lib/api";
+} from "../../lib/api";
 
 /* =========================
  * JWT フォールバック（数値IDだけの sub は使わない）

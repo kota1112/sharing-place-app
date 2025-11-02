@@ -15,7 +15,8 @@ import SignUp from "./pages/SignUp.jsx";
 import Post from "./pages/Post.jsx";
 import AccountConnections from "./pages/AccountConnections.jsx";
 import AccountSettings from "./pages/AccountSettings.jsx";
-import MyPage from "./pages/Mypage.jsx";
+import MyPage from "./components/forMypage/MyPage.jsx";
+
 
 
 /**

@@ -7,28 +7,30 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  // ここで「自分自身」を含めて ESLint に見せたくないものを全部外す
-  // これがないと eslint.config.js 自体を ESLint が読んで
-  // 「import があるけど CJS として読んでるよ？」ってなる
+  // ESLint に見せたくないものを全部ここで外す
+  // これを入れておかないと eslint.config.js 自体を ESLint が読んで
+  // 「ここでも import してるけど CJS だと思ってるよ？」と怒られる
   globalIgnores(["dist", "node_modules", ".vite", "eslint.config.js"]),
   {
     files: ["**/*.{js,jsx}"],
-    plugins: {
-      "jsx-a11y": jsxA11y,
-    },
+    // ❗ここで plugins を定義すると
+    // 「Cannot redefine plugin "jsx-a11y"」になるので書かない
     extends: [
       js.configs.recommended,
-      reactHooks.configs["recommended-latest"], // React Hooks
-      reactRefresh.configs.vite, // Vite fast refresh
-      jsxA11y.flatConfigs.recommended, // a11y
+      // React Hooks の最新ルール
+      reactHooks.configs["recommended-latest"],
+      // Vite の fast refresh 用
+      reactRefresh.configs.vite,
+      // JSX のアクセシビリティ
+      jsxA11y.flatConfigs.recommended,
     ],
     languageOptions: {
       ecmaVersion: 2020,
       globals: {
         ...globals.browser,
-        // ここがポイント：ドット入りはクォートする
+        // Vite やコードで使っているものを readonly で許可
         process: "readonly",
-        "import.meta": "readonly",
+        import.meta: "readonly",
         globalThis: "readonly",
       },
       parserOptions: {
@@ -38,10 +40,10 @@ export default defineConfig([
       },
     },
     rules: {
-      // いまの実装にある空ブロックを壊さない
+      // 既存コードに空ブロックがあるので許可
       "no-empty": "off",
 
-      // 未使用変数は warning、大文字・_ 始まりは無視
+      // 未使用変数は warning。大文字・_ で始まるものは無視
       "no-unused-vars": [
         "warn",
         {
@@ -51,10 +53,10 @@ export default defineConfig([
         },
       ],
 
-      // Post.jsx で出たけど今回は無効化
+      // CI で出てたが今回は無効化しておく
       "jsx-a11y/img-redundant-alt": "off",
 
-      // vite.config.js での process とかを再定義扱いにしない
+      // vite.config.js での process などを再定義扱いにしない
       "no-redeclare": ["error", { builtinGlobals: false }],
     },
   },

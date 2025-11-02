@@ -7,30 +7,27 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  // ESLint に見せたくないものを全部ここで外す
-  // これを入れておかないと eslint.config.js 自体を ESLint が読んで
-  // 「ここでも import してるけど CJS だと思ってるよ？」と怒られる
+  // ESLint に見せたくないものを最初に除外
+  // これを入れておかないと、このファイル自身を ESLint が読んでしまって
+  // 「import があるのに CJS として読んでるよ？」になる
   globalIgnores(["dist", "node_modules", ".vite", "eslint.config.js"]),
   {
     files: ["**/*.{js,jsx}"],
-    // ❗ここで plugins を定義すると
-    // 「Cannot redefine plugin "jsx-a11y"」になるので書かない
+    // plugins はここでは定義しない
+    // → jsxA11y は extends 側で読み込むだけにする
     extends: [
       js.configs.recommended,
-      // React Hooks の最新ルール
-      reactHooks.configs["recommended-latest"],
-      // Vite の fast refresh 用
-      reactRefresh.configs.vite,
-      // JSX のアクセシビリティ
-      jsxA11y.flatConfigs.recommended,
+      reactHooks.configs["recommended-latest"], // React Hooks
+      reactRefresh.configs.vite, // Vite fast refresh
+      jsxA11y.flatConfigs.recommended, // a11y
     ],
     languageOptions: {
       ecmaVersion: 2020,
       globals: {
         ...globals.browser,
-        // Vite やコードで使っているものを readonly で許可
         process: "readonly",
-        import.meta: "readonly",
+        // ← ここをクォートしないと `Unexpected token '.'` が出る
+        "import.meta": "readonly",
         globalThis: "readonly",
       },
       parserOptions: {
@@ -40,10 +37,10 @@ export default defineConfig([
       },
     },
     rules: {
-      // 既存コードに空ブロックがあるので許可
+      // 既存の空ブロックを壊さない
       "no-empty": "off",
 
-      // 未使用変数は warning。大文字・_ で始まるものは無視
+      // 未使用変数は warning。大文字 or _ 始まりは無視
       "no-unused-vars": [
         "warn",
         {
@@ -53,7 +50,7 @@ export default defineConfig([
         },
       ],
 
-      // CI で出てたが今回は無効化しておく
+      // 今回は緩める
       "jsx-a11y/img-redundant-alt": "off",
 
       // vite.config.js での process などを再定義扱いにしない

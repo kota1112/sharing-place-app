@@ -295,50 +295,57 @@ export default function AccountSettings() {
             Update your account information. Email must be confirmed below.
           </p>
 
-          <label className="block text-sm font-medium">
+          <label htmlFor="edit-email" className="block text-sm font-medium">
             New email
-            <input
-              type="email"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={editEmail}
-              onChange={(e) => setEditEmail(e.target.value)}
-              required
-            />
           </label>
+          <input
+            id="edit-email"
+            type="email"
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            value={editEmail}
+            onChange={(e) => setEditEmail(e.target.value)}
+            required
+          />
 
-          <label className="block text-sm font-medium">
+          <label
+            htmlFor="edit-email-confirm"
+            className="block text-sm font-medium"
+          >
             New email (confirm)
-            <input
-              type="email"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={editEmailConfirm}
-              onChange={(e) => setEditEmailConfirm(e.target.value)}
-              required
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Please enter the same email as above.
-            </p>
           </label>
+          <input
+            id="edit-email-confirm"
+            type="email"
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            value={editEmailConfirm}
+            onChange={(e) => setEditEmailConfirm(e.target.value)}
+            required
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Please enter the same email as above.
+          </p>
 
-          <label className="block text-sm font-medium">
+          <label htmlFor="edit-display-name" className="block text-sm font-medium">
             Display name
-            <input
-              type="text"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={editDisplayName}
-              onChange={(e) => setEditDisplayName(e.target.value)}
-            />
           </label>
+          <input
+            id="edit-display-name"
+            type="text"
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            value={editDisplayName}
+            onChange={(e) => setEditDisplayName(e.target.value)}
+          />
 
-          <label className="block text-sm font-medium">
+          <label htmlFor="edit-username" className="block text-sm font-medium">
             Username
-            <input
-              type="text"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={editUsername}
-              onChange={(e) => setEditUsername(e.target.value)}
-            />
           </label>
+          <input
+            id="edit-username"
+            type="text"
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            value={editUsername}
+            onChange={(e) => setEditUsername(e.target.value)}
+          />
 
           <div className="flex gap-3">
             <button
@@ -366,22 +373,23 @@ export default function AccountSettings() {
             Change your password. You must enter the current password first.
           </p>
 
-          <label className="block text-sm">
+          <label htmlFor="current-password" className="block text-sm">
             Current password
-            <input
-              type="password"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
           </label>
+          <input
+            id="current-password"
+            type="password"
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
 
           {/* New password + show/hide */}
           <div className="block text-sm">
             <div className="flex items-center justify-between">
-              <label>New password</label>
+              <label htmlFor="new-password">New password</label>
               <button
                 type="button"
                 onClick={() => setShowNewPw((v) => !v)}
@@ -396,6 +404,7 @@ export default function AccountSettings() {
               </button>
             </div>
             <input
+              id="new-password"
               type={showNewPw ? "text" : "password"}
               className="mt-1 w-full rounded-md border px-3 py-2"
               value={newPassword}
@@ -406,18 +415,19 @@ export default function AccountSettings() {
             />
           </div>
 
-          <label className="block text-sm">
+          <label htmlFor="new-password-conf" className="block text-sm">
             Confirm new password
-            <input
-              type={showNewPw ? "text" : "password"}
-              className="mt-1 w-full rounded-md border px-3 py-2"
-              value={newPasswordConf}
-              onChange={(e) => setNewPasswordConf(e.target.value)}
-              minLength={6}
-              autoComplete="new-password"
-              required
-            />
           </label>
+          <input
+            id="new-password-conf"
+            type={showNewPw ? "text" : "password"}
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            value={newPasswordConf}
+            onChange={(e) => setNewPasswordConf(e.target.value)}
+            minLength={6}
+            autoComplete="new-password"
+            required
+          />
 
           {/* Forgot password? （クリックしたときだけ開く） */}
           <div>

@@ -40,32 +40,40 @@ Devise.setup do |config|
 
   # =========================================================
   # （任意）OmniAuth Google - リダイレクト方式を使う場合のみ有効化
-  # ---------------------------------------------------------
-  # 今回のアプリは「GISでid_tokenを取って /auth/google に投げる」方式を
-  # メインにしているので、このブロックは基本的に動かなくてもOK。
-  # 将来「Googleでリダイレクトログインもしたい」となったときだけ
-  # USE_OMNIAUTH_GOOGLE=true で有効にする。
+  #
+  # ふだんは「/auth/google に GIS の id_token をPOSTする」今の運用でOK。
+  # 「/users/auth/google_oauth2 でブラウザをリダイレクトしてログインしたい」
+  # ときだけ USE_OMNIAUTH_GOOGLE=true を環境変数で立てる。
   # =========================================================
   if ENV["USE_OMNIAUTH_GOOGLE"] == "true"
     begin
       require "omniauth"
       require "omniauth-google-oauth2"
 
-      if ENV["GOOGLE_CLIENT_ID"].present? && ENV["GOOGLE_CLIENT_SECRET"].present?
+      client_id     = ENV["GOOGLE_CLIENT_ID"]
+      client_secret = ENV["GOOGLE_CLIENT_SECRET"]
+
+      if client_id.present? && client_secret.present?
         config.omniauth :google_oauth2,
-                        ENV["GOOGLE_CLIENT_ID"],
-                        ENV["GOOGLE_CLIENT_SECRET"],
+                        client_id,
+                        client_secret,
                         {
-                          scope:  "openid,email,profile",
-                          prompt: "select_account",
-                          access_type: "offline",
+                          scope:       "openid,email,profile",
+                          prompt:      "select_account",
+                          access_type: "offline"
                         }
+
+        # ここがポイント：GET でも POST でも /users/auth/google_oauth2 を受ける
         OmniAuth.config.allowed_request_methods = %i[get post]
       else
-        Rails.logger.warn("[Devise/OmniAuth] GOOGLE_CLIENT_ID/SECRET が未設定のため、Google連携は無効です")
+        Rails.logger.warn(
+          "[Devise/OmniAuth] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET が未設定のため、リダイレクト方式のGoogleログインは無効です"
+        )
       end
     rescue LoadError
-      Rails.logger.warn("[Devise/OmniAuth] omniauth 系 gem が見つかりません。id_token 直投げ方式のみで運用します")
+      Rails.logger.warn(
+        "[Devise/OmniAuth] omniauth 系 gem が見つかりません。/auth/google への id_token 直投げ方式だけで動かします"
+      )
     end
   end
 
@@ -94,8 +102,11 @@ Devise.setup do |config|
     jwt.dispatch_requests = [
       # 通常のメール/パスワードログイン
       ["POST", %r{^/auth/sign_in$}],
-      # GIS でとった id_token を投げるやつ
+      # GIS でとった id_token を投げるやつ（いまあなたが使ってるメインのやつ）
       ["POST", %r{^/auth/google$}],
+      # ※ 将来ここに
+      # ["GET", %r{^/users/auth/google_oauth2/callback$}]
+      # を足すと「リダイレクトでもJWT出す」にもできる
     ]
 
     # JWT を失効させるリクエスト（ログアウト）
@@ -104,8 +115,6 @@ Devise.setup do |config|
     ]
 
     # 有効期限
-    # 環境変数 DEVISE_JWT_EXP_MIN=30 とかにすると30分にできる
-    # 指定がなければ従来どおり24時間(1440分)
     exp_minutes = ENV.fetch("DEVISE_JWT_EXP_MIN", "1440").to_i
     jwt.expiration_time = exp_minutes.minutes.to_i
   end

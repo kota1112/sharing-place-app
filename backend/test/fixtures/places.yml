@@ -1,35 +1,39 @@
-# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+# test/fixtures/places.yml
+# users.yml が
+#   one:
+#     id: 1
+#     email: user1@example.com
+#   two:
+#     id: 2
+#     email: user2@example.com
+# になっている前提です。
 
 one:
-  author: one
-  name: MyString
-  description: MyText
-  address_line: MyString
-  city: MyString
-  state: MyString
-  postal_code: MyString
-  country: MyString
-  latitude: 1.5
-  longitude: 1.5
-  google_place_id: MyString
-  phone: MyString
-  website_url: MyString
-  status: MyString
-  deleted_at: 2025-10-16 00:12:23
+  id: 1
+  name: "Test place 1"
+  description: "fixture for place 1"
+  address_line: "1-1-1 Tokyo"
+  city: "Tokyo"
+  state: "Tokyo"
+  postal_code: "100-0001"
+  country: "JP"
+  latitude: 35.6804
+  longitude: 139.7690
+  author_id: 1
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
 
 two:
-  author: two
-  name: MyString
-  description: MyText
-  address_line: MyString
-  city: MyString
-  state: MyString
-  postal_code: MyString
-  country: MyString
-  latitude: 1.5
-  longitude: 1.5
-  google_place_id: MyString
-  phone: MyString
-  website_url: MyString
-  status: MyString
-  deleted_at: 2025-10-16 00:12:23
+  id: 2
+  name: "Test place 2"
+  description: "fixture for place 2"
+  address_line: "2-2-2 Osaka"
+  city: "Osaka"
+  state: "Osaka"
+  postal_code: "530-0001"
+  country: "JP"
+  latitude: 34.6937
+  longitude: 135.5023
+  author_id: 2
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>

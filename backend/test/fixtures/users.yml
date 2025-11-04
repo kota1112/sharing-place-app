@@ -1,11 +1,16 @@
-# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+# test/fixtures/users.yml
+# Devise を使っている前提で、email をユニークにしておく版です。
+# このままコピペして OK です。
 
-# This model initially had no columns defined. If you add columns to the
-# model remove the "{}" from the fixture names and add the columns immediately
-# below each fixture, per the syntax in the comments below
-#
-one: {}
-# column: value
-#
-two: {}
-# column: value
+one:
+  id: 1
+  email: user1@example.com
+  encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
+  # 必要なら他のカラムもここに追加してください
+  # confirmed_at: <%= Time.current %>
+
+two:
+  id: 2
+  email: user2@example.com
+  encrypted_password: <%= Devise::Encryptor.digest(User, "password123") %>
+  # confirmed_at: <%= Time.current %>

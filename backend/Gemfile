@@ -75,3 +75,6 @@ gem "secure_headers"
 
 # レート制限
 gem "rack-attack"
+
+# s3
+gem 'aws-sdk-s3', '~> 1.149'

@@ -32,23 +32,47 @@ test:
 #  - もし DATABASE_URL を未設定にして運用する場合だけ、
 #    既存の multi-DB（primary/cache/queue/cable）構成にフォールバック
 # ─────────────────────────────────────────────────────────────
+# --- snip (development/test はそのまま) ---
+
 production:
   <% if ENV["DATABASE_URL"] %>
-  url: <%= ENV["DATABASE_URL"] %>
-  # 本番のプールは環境に合わせて調整（Puma ワーカー数 × スレッド数以上を推奨）
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  # Render 等で DATABASE_URL を使うとき：各ロールに同じ URL を割り当て（1DB運用でOK）
+  primary:
+    <<: *default
+    url: <%= ENV["DATABASE_URL"] %>
+    pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+
+  cache:
+    <<: *default
+    url: <%= ENV["DATABASE_URL"] %>
+    migrations_paths: db/cache_migrate
+
+  queue:
+    <<: *default
+    url: <%= ENV["DATABASE_URL"] %>
+    migrations_paths: db/queue_migrate
+
+  cable:
+    <<: *default
+    url: <%= ENV["DATABASE_URL"] %>
+    migrations_paths: db/cable_migrate
   <% else %>
+  # DATABASE_URL を使わない運用（従来の multi-DB 名）：
   primary:
     <<: *default
     database: <%= ENV.fetch("PGDATABASE") { "sharing_place_app_production" } %>
+    pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+
   cache:
     <<: *default
     database: <%= ENV.fetch("PGCACHE_DATABASE") { "sharing_place_app_production_cache" } %>
     migrations_paths: db/cache_migrate
+
   queue:
     <<: *default
     database: <%= ENV.fetch("PGQUEUE_DATABASE") { "sharing_place_app_production_queue" } %>
     migrations_paths: db/queue_migrate
+
   cable:
     <<: *default
     database: <%= ENV.fetch("PGCABLE_DATABASE") { "sharing_place_app_production_cable" } %>

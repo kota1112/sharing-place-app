@@ -26,6 +26,10 @@ Rails.application.configure do
   config.active_storage.service =
     (ENV["ACTIVE_STORAGE_SERVICE"].presence || "local").to_sym
 
+  # 署名付きURLの有効期限（デフォルト15分）。
+  # Render/Vercel 等で公開ブロックのS3を使う想定なので明示しておくと安全。
+  config.active_storage.service_urls_expire_in = 15.minutes
+
   # Assume all access to the app is happening through a SSL-terminating reverse proxy.
   # （Render のような PaaS で HTTPS 終端される前提）
   config.assume_ssl = true

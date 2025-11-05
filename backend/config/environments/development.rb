@@ -1,3 +1,4 @@
+# config/environments/development.rb
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
@@ -26,8 +27,13 @@ Rails.application.configure do
   # Change to :null_store to avoid any caching.
   config.cache_store = :memory_store
 
-  # Store uploaded files on the local file system (see config/storage.yml for options).
-  config.active_storage.service = :local
+  # Store uploaded files via ActiveStorage.
+  # 通常は :local。ACTIVE_STORAGE_SERVICE=amazon を与えると S3 を使用できます。
+  active_storage_service = (ENV["ACTIVE_STORAGE_SERVICE"] || "local").to_sym
+  config.active_storage.service = active_storage_service
+
+  # 開発中に S3 を使う場合だけ、署名付きURLの有効期限を短めにしておく（任意）
+  config.active_storage.service_urls_expire_in = 15.minutes if active_storage_service == :amazon
 
   # Don't care if the mailer can't send.
   config.action_mailer.raise_delivery_errors = false

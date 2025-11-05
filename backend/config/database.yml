@@ -1,21 +1,21 @@
 # config/database.yml
 # PostgreSQL（Postgres.app / Homebrew / EnterpriseDB いずれでもOK）
+
 default: &default
   adapter: postgresql
   encoding: unicode
 
-  # コネクション数（なければ10）
+  # コネクション数（指定がなければ 10）
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 10 } %>
 
   # 優先度: PGUSER → USER → "postgres"
   username: <%= ENV.fetch("PGUSER") { ENV.fetch("USER") { "postgres" } } %>
 
-  # host / port は「.env がなくても動く」ようにデフォルトを入れておく
-  # ここが今回のポイント
-  host: <%= ENV.fetch("PGHOST", "127.0.0.1") %>   # ← 未設定なら 127.0.0.1
-  port: <%= ENV.fetch("PGPORT", 5432) %>           # ← 未設定なら 5432 固定
+  # .env が無くても動くようにデフォルト値を入れておく
+  host: <%= ENV.fetch("PGHOST", "127.0.0.1") %>
+  port: <%= ENV.fetch("PGPORT", 5432) %>
 
-  # パスワードが必要な環境（EDBなど）は PGPASSWORD を設定して使う
+  # パスワードが必要な環境（EDB など）は PGPASSWORD を設定して使う
   password: <%= ENV["PGPASSWORD"] %>
 
 development:
@@ -26,9 +26,18 @@ test:
   <<: *default
   database: sharing_place_app_test
 
-# 本番：multi-DB（primary/cache/queue/cable）を踏襲。
-# 使っていない場合は primary だけ残してOK。
+# ─────────────────────────────────────────────────────────────
+# 本番:
+#  - Render など PaaS では DATABASE_URL を最優先で利用
+#  - もし DATABASE_URL を未設定にして運用する場合だけ、
+#    既存の multi-DB（primary/cache/queue/cable）構成にフォールバック
+# ─────────────────────────────────────────────────────────────
 production:
+  <% if ENV["DATABASE_URL"] %>
+  url: <%= ENV["DATABASE_URL"] %>
+  # 本番のプールは環境に合わせて調整（Puma ワーカー数 × スレッド数以上を推奨）
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  <% else %>
   primary:
     <<: *default
     database: <%= ENV.fetch("PGDATABASE") { "sharing_place_app_production" } %>
@@ -44,3 +53,4 @@ production:
     <<: *default
     database: <%= ENV.fetch("PGCABLE_DATABASE") { "sharing_place_app_production_cable" } %>
     migrations_paths: db/cable_migrate
+  <% end %>

@@ -20,7 +20,8 @@ local:
 # ※ AWS SDK は環境変数を自動で読みます。明示指定してもOKです。
 amazon:
   service: S3
-  bucket: <%= ENV.fetch("AWS_BUCKET") %>
+  # CI等で未設定でもYAMLのパースで落ちないようにダミー既定値を入れる
+  bucket: <%= ENV.fetch("AWS_BUCKET", "dummy-ci-bucket") %>
   region: <%= ENV.fetch("AWS_REGION", "ap-southeast-2") %>
   # 明示的に渡したい場合のみ以下を有効化（環境変数から自動取得できるため通常は不要）
   access_key_id: <%= ENV["AWS_ACCESS_KEY_ID"] %>

@@ -18,58 +18,42 @@ Rails.application.configure do
     "cache-control" => "public, max-age=#{1.year.to_i}"
   }
 
-  # Enable serving of images, stylesheets, and JavaScripts from an asset server.
-  # config.asset_host = "http://assets.example.com"
-
   # ===== Active Storage =====
   # 本番では S3 を使う想定。ENV が無ければローカルにフォールバック。
   config.active_storage.service =
     (ENV["ACTIVE_STORAGE_SERVICE"].presence || "local").to_sym
 
-  # 署名付きURLの有効期限（デフォルト15分）。
-  # Render/Vercel 等で公開ブロックのS3を使う想定なので明示しておくと安全。
+  # 署名付きURLの有効期限（デフォルト15分）
   config.active_storage.service_urls_expire_in = 15.minutes
 
-  # Assume all access to the app is happening through a SSL-terminating reverse proxy.
-  # （Render のような PaaS で HTTPS 終端される前提）
+  # HTTPS 前提（RenderなどのリバースプロキシでTLS終端）
   config.assume_ssl = true
+  config.force_ssl  = true
+  # config.ssl_options = { redirect: { exclude: ->(r){ r.path == "/up" } } }
 
-  # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  config.force_ssl = true
-
-  # Skip http-to-https redirect for the default health check endpoint.
-  # config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
-
-  # Log to STDOUT with the current request id as a default log tag.
+  # ログ
   config.log_tags = [:request_id]
-
-  # Render / 12factor 向けに STDOUT に出す
   logger           = ActiveSupport::Logger.new($stdout)
   logger.formatter = ::Logger::Formatter.new
   config.logger    = ActiveSupport::TaggedLogging.new(logger)
-
-  # Change to "debug" to log everything (including potentially personally-identifiable information!)
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
-
-  # Prevent health checks from clogging up the logs.
   config.silence_healthcheck_path = "/up"
-
-  # Don't log any deprecations.
   config.active_support.report_deprecations = false
 
-  # Replace the default in-process memory cache store with a durable alternative.
+  # キャッシュ / ジョブ
   config.cache_store = :solid_cache_store
-
-  # Replace the default in-process and non-durable queuing backend for Active Job.
   config.active_job.queue_adapter = :solid_queue
   config.solid_queue.connects_to = { database: { writing: :queue } }
 
-  # ===== Mailer =====
-  # 本番URLを ENV から設定（Vercel / 独自ドメインに合わせる）
-  app_host = ENV.fetch("APP_HOST", "example.com")
-  config.action_mailer.default_url_options = { host: app_host, protocol: "https" }
+  # ===== Mailer / URL 既定ホスト =====
+  # Render では RENDER_EXTERNAL_HOSTNAME が与えられる
+  render_host = ENV["RENDER_EXTERNAL_HOSTNAME"].presence
+  # APP_HOST があれば最優先。無ければ Render の実ホスト、それも無ければ固定の onrender ドメイン。
+  app_host = ENV["APP_HOST"].presence || render_host || "sharing-place-api.onrender.com"
 
-  # SMTP が設定されていれば使う
+  config.action_mailer.default_url_options      = { host: app_host, protocol: "https" }
+  config.action_controller.default_url_options  = { host: app_host, protocol: "https" }
+
   if ENV["SMTP_ADDRESS"].present?
     config.action_mailer.perform_caching = false
     config.action_mailer.delivery_method = :smtp
@@ -84,26 +68,33 @@ Rails.application.configure do
     }
   end
 
-  # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
-  # the I18n.default_locale when a translation cannot be found).
+  # I18n
   config.i18n.fallbacks = true
 
-  # Do not dump schema after migrations.
+  # DB
   config.active_record.dump_schema_after_migration = false
-
-  # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [:id]
 
-  # ===== Host ヘッダの保護 =====
-  # Render の自動ドメインや本番ドメインを ENV で許可
+  # ===== Host ヘッダの保護（Allowlist）=====
   allowed_hosts = []
+
+  # 既定ホスト（APP_HOST または Render 実ホスト）を許可
   allowed_hosts << app_host if app_host.present?
-  # 複数ホストを許可したい場合: APP_HOSTS="a.com,b.com"
+
+  # Render で自動付与されるホスト名があれば明示許可
+  allowed_hosts << render_host if render_host.present?
+
+  # 複数ホスト：APP_HOSTS="a.com,b.com"
   if ENV["APP_HOSTS"].present?
     allowed_hosts.concat ENV["APP_HOSTS"].split(",").map(&:strip)
   end
-  config.hosts = allowed_hosts if allowed_hosts.any?
 
-  # Skip DNS rebinding protection for the default health check endpoint.
+  # 将来別サービス/プレビューの onrender ドメインでも動くようにワイルドカードを追加
+  config.hosts << /\A.*\.onrender\.com\z/
+
+  # 明示ホストを登録
+  allowed_hosts.uniq.each { |h| config.hosts << h }
+
+  # /up は HostAuthorization をスキップ（ヘルスチェック用）
   config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end

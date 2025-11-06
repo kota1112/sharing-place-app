@@ -2,23 +2,28 @@
 class Users::SessionsController < Devise::SessionsController
   respond_to :json
 
+  # ルートが {:format=>:json} のため、拡張子なしでも確実に JSON で処理
+  before_action :force_json_format
+
   # API用: サインイン/アウトではCSRFを無効化（存在しなくてもraiseしない）
   skip_before_action :verify_authenticity_token, only: [:create, :destroy], raise: false
 
   # /auth/me は JWT 必須
   before_action :authenticate_user!, only: [:me]
 
+  # 🔎 デバッグ専用: create の内外（before/after/filter含む）で起きた例外を捕捉して
+  #    環境変数 DEBUG_AUTH_ERRORS=true の時だけヘッダで可視化
+  around_action :wrap_exceptions_for_debug, only: [:create]
+
   # POST /auth/sign_in
   #
-  # 既存の契約は維持します:
-  # - リクエスト形: {user:{email,password}} / {email,password} の両対応
-  # - レスポンス形: { user: ... } を返す
-  # - JWT は Authorization レスポンスヘッダ（Bearer）で返す
+  # 契約は維持:
+  # - 入力: {user:{email,password}} / {email,password} 両対応
+  # - 出力: { user: ... }
+  # - JWT は Authorization レスポンスヘッダ（Bearer）
   #
   # 変更点:
-  # - devise-jwt の自動ディスパッチで落ちる環境でも 500 を出さないよう、
-  #   例外は握りつぶして 401 を返す
-  # - JWT は手動発行（ヘッダ付与）に統一して安定化
+  # - devise-jwt の自動ディスパッチに依存せず、手動発行に統一
   def create
     email, password = extract_credentials
     unless email.present? && password.present?
@@ -30,22 +35,19 @@ class Users::SessionsController < Devise::SessionsController
       return render json: { error: "Invalid credentials" }, status: :unauthorized
     end
 
-    # devise-jwt の Warden ディスパッチを明示的にスキップし、手動でトークンを発行する
+    # devise-jwt の Warden ディスパッチをスキップ（手動発行に任せる）
     request.env['warden-jwt_auth.skip'] = true
 
-    # Devise のセッション状態は確立しておく（current_user 用）
+    # current_user を使えるように Devise のサインインは行う（セッション張るだけ）
     sign_in(:user, user)
 
-    # JWT を手動発行してヘッダへ
+    # 手動で JWT を発行 → レスポンスヘッダ
     token, _payload = Warden::JWTAuth::UserEncoder.new.call(user, :user, nil)
     response.set_header('Authorization', "Bearer #{token}")
     # フロントから Authorization ヘッダを読み取れるように
     response.set_header('Access-Control-Expose-Headers', 'Authorization')
 
     render json: { user: user_payload(user) }, status: :ok
-  rescue => e
-    Rails.logger.error("[sign_in] #{e.class}: #{e.message}\n#{Array(e.backtrace).first(5).join("\n")}")
-    render json: { error: "Sign in failed" }, status: :unauthorized
   end
 
   # DELETE /auth/sign_out
@@ -62,6 +64,10 @@ class Users::SessionsController < Devise::SessionsController
   end
 
   private
+
+  def force_json_format
+    request.format = :json
+  end
 
   # {user:{email,password}} / {email,password} 両対応で取り出す
   def extract_credentials
@@ -91,11 +97,24 @@ class Users::SessionsController < Devise::SessionsController
     }
   end
 
+  # 🔎 create まわりの例外を 500 にせず捕捉し、401 で返す
+  #    DEBUG_AUTH_ERRORS=true のときだけヘッダで例外名/メッセージを露出
+  def wrap_exceptions_for_debug
+    yield
+  rescue => e
+    Rails.logger.error("[sign_in] #{e.class}: #{e.message}\n#{Array(e.backtrace).first(10).join("\n")}")
+    if ENV["DEBUG_AUTH_ERRORS"] == "true"
+      response.set_header('X-Debug-Error', e.class.to_s)
+      response.set_header('X-Debug-Message', e.message.to_s[0, 200])
+    end
+    render json: { error: "Sign in failed" }, status: :unauthorized
+  end
+
   protected
 
   # Devise デフォルトの「既にサインアウトしています」フラッシュを止める
   def verify_signed_out_user
-    # 何もしない -> 常に 204 にする
+    # 何もしない -> 常に 204
   end
 
   # JSON 用のサインアウトレスポンス

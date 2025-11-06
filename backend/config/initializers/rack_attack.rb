@@ -1,15 +1,21 @@
 # config/initializers/rack_attack.rb
 
-# === TEMP: use MemoryStore in prod until Solid tables exist ===
-# 環境変数 RACK_ATTACK_USE_MEMORY_STORE=true のときだけ、
-# Rack::Attack のキャッシュをメモリストアに切り替えて DB（Solid Cache）を触らないようにする。
-# 既存のロジックはそのまま・条件付きでの上書きのみ。
-if ENV["RACK_ATTACK_USE_MEMORY_STORE"] == "true"
-  Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new
-end
-
-# 起動時に一度だけ設定されるようにクラスを開く
+# Rack::Attack の設定はこのクラスブロック内で完結させる
 class Rack::Attack
+  # ===============================
+  # 0. 使用するキャッシュストアの選択
+  # ===============================
+  #
+  # ・RACK_ATTACK_USE_MEMORY_STORE=true のときだけ MemoryStore を使う（DBに触らない）
+  # ・それ以外は Rails.cache（＝本番では Solid Cache）を使う
+  #
+  self.cache.store =
+    if ENV["RACK_ATTACK_USE_MEMORY_STORE"] == "true"
+      ActiveSupport::Cache::MemoryStore.new
+    else
+      Rails.cache
+    end
+
   # ===============================
   # 1. 認証まわりのレート制限
   # ===============================
@@ -50,10 +56,10 @@ class Rack::Attack
     ]
   end
 
-  # 新しいRack::Attack(6.x〜)ならこっちだけ使う
+  # Rack::Attack 6.x 以降
   if respond_to?(:throttled_responder=)
     self.throttled_responder = json_429
-  # 古いRack::Attack(5.x)しかない環境ならこっち
+  # 5.x 系への後方互換
   elsif respond_to?(:throttled_response=)
     self.throttled_response = json_429
   end

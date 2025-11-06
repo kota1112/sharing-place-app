@@ -13,7 +13,7 @@ jobs:
 
     services:
       postgres:
-        # 安定版に合わせて 16 を使用（18 は存在しないため失敗します）
+        # 安定版の Postgres。structure.sql 依存を避け、CI は migrate で構築する方針
         image: postgres:16
         env:
           POSTGRES_USER: postgres
@@ -30,7 +30,7 @@ jobs:
     env:
       RAILS_ENV: test
 
-      # Rails が DB に接続するために必要（DATABASE_URL ではなく PG* を明示）
+      # Rails が DB に接続するための環境変数（DATABASE_URL は使わず PG* を明示）
       PGHOST: 127.0.0.1
       PGPORT: 5432
       PGUSER: postgres
@@ -55,8 +55,8 @@ jobs:
         with:
           ruby-version: "3.3.4"
           bundler-cache: true
-          working-directory: backend
 
+      # ActiveStorage の variants 等で必要になることがあるため
       - name: Install system deps (for ActiveStorage variants)
         run: |
           sudo apt-get update
@@ -66,7 +66,7 @@ jobs:
         working-directory: backend
         run: bundle install --jobs 4 --retry 3
 
-      - name: Prepare test databases (primary/cache/queue/cable)
+      - name: Create test databases (primary/cache/queue/cable)
         working-directory: backend
         run: |
           psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test;"
@@ -74,15 +74,8 @@ jobs:
           psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test_queue;"
           psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test_cable;"
 
-      - name: Load schemas for all roles
-        working-directory: backend
-        run: |
-          bin/rails db:schema:load:primary
-          bin/rails db:schema:load:cache
-          bin/rails db:schema:load:queue
-          bin/rails db:schema:load:cable
-
-      - name: Run migrations (noop if none)
+      # ✅ schema:load は使わず、全ロールを migrate で構築（バージョン差異に強い）
+      - name: Migrate all roles
         working-directory: backend
         run: |
           bin/rails db:migrate:primary

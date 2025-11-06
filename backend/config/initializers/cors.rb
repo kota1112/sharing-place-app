@@ -1,7 +1,7 @@
 # config/initializers/cors.rb
-# SPA(フロント) → Rails API へのクロスオリジン要求を許可する設定
-# 既存の挙動（Authorization ヘッダの露出、開発用オリジン許可）は維持しつつ、
-# 環境変数で本番ドメインを柔軟に追加できるようにしています。
+# SPA(フロント) → Rails API へのクロスオリジン要求（CORS）設定。
+# 既存の挙動（Authorization ヘッダの露出、開発用オリジン許可）を維持しつつ、
+# 本番ドメインを環境変数で柔軟に追加できるようにし、Vercel のプレビュー URL も許可します。
 
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
   # ---- 本番/開発 共通: 明示オリジン（環境変数 or 既定ローカル） ----
@@ -21,7 +21,7 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
     single = ENV.fetch("FRONTEND_ORIGIN", nil)
     env_single =
       if single.present?
-        [single]
+        [single.strip]
       else
         []
       end
@@ -35,20 +35,33 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
     ]
 
     # 環境変数で指定されたものを優先、なければ開発用の値
+    configured = (env_list + env_single).uniq
+
+    # 値を正規化：
+    # - 末尾スラッシュは除去
+    # - スキームが無ければ https:// を付与（"example.com" → "https://example.com"）
+    normalized =
+      configured.map do |o|
+        o = o.sub(%r{/\z}, "")
+        o =~ %r{\Ahttps?://} ? o : "https://#{o}"
+      end
+
     final_origins =
-      if env_list.any?
-        env_list
-      elsif env_single.any?
-        env_single
+      if normalized.any?
+        normalized
       else
         default_dev_origins
       end
 
-    origins(*final_origins)
+    # Vercel のプレビュー URL も許可：
+    # 例）https://sharing-place-xxxxxx-kota4869s-projects.vercel.app
+    vercel_preview_regex = %r{\Ahttps://[a-z0-9-]+-kota4869s-projects\.vercel\.app\z}
+
+    origins(*final_origins, vercel_preview_regex)
 
     resource "*",
              headers: :any,
-             expose: %w[Authorization], # ← JWT をJSから読めるように
+             expose: %w[Authorization], # JWT をフロントで読めるように露出
              methods: %i[get post put patch delete options head],
              max_age: 86_400
   end

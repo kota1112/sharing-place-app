@@ -1,3 +1,4 @@
+# config/queue.yml
 default: &default
   dispatchers:
     - polling_interval: 1

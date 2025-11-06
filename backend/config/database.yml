@@ -50,27 +50,44 @@ test:
 # ─────────────────────
 # production（Render 等）
 # 全ロールで同一の DATABASE_URL を使用する構成
-# ※ DATABASE_URL には必ず sslmode=require を付与：
-#   例）.../sharing_place_prod?sslmode=require
-#   既にクエリがある場合）.../sharing_place_prod?foo=bar&sslmode=require
+# ※ DATABASE_URL には sslmode=require を付与しておくこと（Render 推奨）
 # ─────────────────────
 production:
+  <% db_url = ENV["DATABASE_URL"].to_s %>
+  <% if !db_url.empty? %>
+  # 1DB 運用（全ロールで同じ接続 URL を使う）
   primary:
-    adapter: postgresql
-    url: <%= ENV.fetch("DATABASE_URL") %>
+    <<: *default
+    url: <%= db_url %>
     pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
-
   cache:
-    adapter: postgresql
-    url: <%= ENV.fetch("DATABASE_URL") %>
+    <<: *default
+    url: <%= db_url %>
     migrations_paths: db/cache_migrate
-
   queue:
-    adapter: postgresql
-    url: <%= ENV.fetch("DATABASE_URL") %>
+    <<: *default
+    url: <%= db_url %>
     migrations_paths: db/queue_migrate
-
   cable:
-    adapter: postgresql
-    url: <%= ENV.fetch("DATABASE_URL") %>
+    <<: *default
+    url: <%= db_url %>
     migrations_paths: db/cable_migrate
+  <% else %>
+  # 複数 DB 名で運用（各ロールで別 DB を使いたい場合など）
+  primary:
+    <<: *default
+    database: <%= ENV.fetch("PGDATABASE") { "sharing_place_app_production" } %>
+    pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  cache:
+    <<: *default
+    database: <%= ENV.fetch("PGCACHE_DATABASE") { "sharing_place_app_production_cache" } %>
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    database: <%= ENV.fetch("PGQUEUE_DATABASE") { "sharing_place_app_production_queue" } %>
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    database: <%= ENV.fetch("PGCABLE_DATABASE") { "sharing_place_app_production_cable" } %>
+    migrations_paths: db/cable_migrate
+  <% end %>

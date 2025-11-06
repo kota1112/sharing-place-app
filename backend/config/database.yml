@@ -26,9 +26,9 @@ development:
   database: sharing_place_app_development
 
 # ─────────────────────
-# test（← ここを multi-DB 化）
-# Rails の schema:load/migrate 系タスクは内部で test の各DB設定も参照するため、
-# cache/queue/cable も用意して nil を避ける
+# test（multi-DB）
+# schema:load / migrate が test の全DB定義を見るため、
+# cache/queue/cable も明示して nil を避ける
 # ─────────────────────
 test:
   primary:
@@ -47,30 +47,30 @@ test:
     database: <%= ENV.fetch("PGCABLE_DATABASE_TEST") { "sharing_place_app_test_cable" } %>
     migrations_paths: db/cable_migrate
 
-# ─────────────────────────────────────────────────────────────
-# production:
-#  - Render など PaaS では DATABASE_URL を最優先で利用
-#  - もし DATABASE_URL を未設定で運用する場合は、
-#    既存の multi-DB（primary/cache/queue/cable）名にフォールバック
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────
+# production（Render 等）
+# 全ロールで同一の DATABASE_URL を使用する構成
+# ※ DATABASE_URL には sslmode=require を付与しておくこと（Render 推奨）
+# ─────────────────────
 production:
-  <% if ENV["DATABASE_URL"] %>
+  <% db_url = ENV["DATABASE_URL"].to_s %>
+  <% if !db_url.empty? %>
   # 1DB 運用（全ロールで同じ接続 URL を使う）
   primary:
     <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
+    url: <%= db_url %>
     pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
   cache:
     <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
+    url: <%= db_url %>
     migrations_paths: db/cache_migrate
   queue:
     <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
+    url: <%= db_url %>
     migrations_paths: db/queue_migrate
   cable:
     <<: *default
-    url: <%= ENV["DATABASE_URL"] %>
+    url: <%= db_url %>
     migrations_paths: db/cable_migrate
   <% else %>
   # 複数 DB 名で運用（各ロールで別 DB を使いたい場合など）

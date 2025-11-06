@@ -13,33 +13,41 @@ jobs:
 
     services:
       postgres:
-        # 元の意図どおり 18 を維持
-        image: postgres:18
+        # サーバを PG17 に固定（構造ダンプでの transaction_timeout も扱える）
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: sharing_place_app_test
+          POSTGRES_DB: postgres
         ports:
           - "5432:5432"
         options: >-
-          --health-cmd "pg_isready -U postgres -d sharing_place_app_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     env:
       RAILS_ENV: test
-      # backend/config/database.yml の test: に合わせる
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/sharing_place_app_test
-      # Rails が起動時に要求するのでダミーでOK
-      SECRET_KEY_BASE: dummy_secret_key_base
-      # devise-jwt 初期化向けダミー
+
+      # Rails が DB に接続するための環境変数（DATABASE_URL ではなく PG* を明示）
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+      # 起動時に求められる各種 ENV（CI ではダミーで OK）
+      SECRET_KEY_BASE: dummy_secret_key_base_for_ci
       DEVISE_JWT_SECRET_KEY: dummy_jwt_secret_for_ci
-      # ActiveStorage を CI ではローカルに固定（S3 依存を避ける）
       ACTIVE_STORAGE_SERVICE: local
-      # storage.yml の ERB 参照で KeyError を避けるダミー（あってもS3は使われない）
+      USE_OMNIAUTH_GOOGLE: "false"
+
+      # storage.yml の ERB 参照ケア（使われないが未定義エラー回避）
       AWS_BUCKET: dummy-ci-bucket
       AWS_REGION: ap-southeast-2
+
+      # Spring を無効化（まれなキャッシュ問題の回避用）
+      DISABLE_SPRING: "1"
 
     steps:
       - name: Checkout repo
@@ -51,35 +59,50 @@ jobs:
           ruby-version: "3.3.4"
           bundler-cache: true
 
-      # ActiveStorage の analyze/variant が動作する環境にしておく（無くても大半はOK）
-      - name: Install system deps
+      # ✅ PGDG リポジトリを追加して PG17 クライアントを導入（psql/pg_dump のバージョンをサーバと一致させる）
+      - name: Install PG17 client & system deps
         run: |
+          sudo install -d -m 0755 /usr/share/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+
           sudo apt-get update
-          sudo apt-get install -y libvips || true
+          sudo apt-get install -y postgresql-client-17 libvips
+
+          # PATH に PG17 の bin を追加（保険）
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+          pg_dump --version
+          psql --version
 
       - name: Install gems
         working-directory: backend
         run: bundle install --jobs 4 --retry 3
 
-      - name: Prepare database
+      - name: Create test databases (primary/cache/queue/cable)
         working-directory: backend
-        env:
-          RAILS_ENV: test
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/sharing_place_app_test
         run: |
-          bin/rails db:drop db:create
-          bin/rails db:schema:load --trace
+          psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test;"
+          psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test_cache;"
+          psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test_queue;"
+          psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test_cable;"
+
+      # schema:load は使わず、全ロールを migrate で構築（既存方針を踏襲）
+      - name: Migrate all roles
+        working-directory: backend
+        run: |
+          bin/rails db:migrate:primary
+          bin/rails db:migrate:cache
+          bin/rails db:migrate:queue
+          bin/rails db:migrate:cable
 
       - name: Run tests
         working-directory: backend
-        env:
-          RAILS_ENV: test
         run: bundle exec rails test
 
   frontend:
     name: Frontend (Vite / React)
     runs-on: ubuntu-latest
-    # バックエンドが通ってから実行（元ロジックに追加）
     needs: backend
 
     defaults:
@@ -106,5 +129,5 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # CI ビルド時はダミーでOK（実運用はVercel側で上書き）
+          # CI ビルド時はダミーでOK（本番は Vercel 側で設定）
           VITE_API_BASE: "http://localhost:3000"

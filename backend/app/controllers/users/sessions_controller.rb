@@ -2,7 +2,7 @@
 class Users::SessionsController < Devise::SessionsController
   respond_to :json
 
-  # ルートが {:format=>:json} のため、拡張子なしでも確実に JSON で処理
+  # ルートは {:format=>:json} だが、拡張子なしでも確実に JSON として処理
   before_action :force_json_format
 
   # API用: サインイン/アウトではCSRFを無効化（存在しなくてもraiseしない）
@@ -11,8 +11,7 @@ class Users::SessionsController < Devise::SessionsController
   # /auth/me は JWT 必須
   before_action :authenticate_user!, only: [:me]
 
-  # 🔎 デバッグ専用: create の内外（before/after/filter含む）で起きた例外を捕捉して
-  #    環境変数 DEBUG_AUTH_ERRORS=true の時だけヘッダで可視化
+  # デバッグ時のみ例外をヘッダに露出（500にしない）
   around_action :wrap_exceptions_for_debug, only: [:create]
 
   # POST /auth/sign_in
@@ -20,10 +19,11 @@ class Users::SessionsController < Devise::SessionsController
   # 契約は維持:
   # - 入力: {user:{email,password}} / {email,password} 両対応
   # - 出力: { user: ... }
-  # - JWT は Authorization レスポンスヘッダ（Bearer）
+  # - JWT: レスポンスヘッダ Authorization: Bearer <token>
   #
-  # 変更点:
-  # - devise-jwt の自動ディスパッチに依存せず、手動発行に統一
+  # 安定化:
+  # - devise-jwt の自動ディスパッチは使わず、手動でJWT発行
+  # - APIモードで例外になりがちなセッション保存は行わない（store: false）
   def create
     email, password = extract_credentials
     unless email.present? && password.present?
@@ -35,23 +35,22 @@ class Users::SessionsController < Devise::SessionsController
       return render json: { error: "Invalid credentials" }, status: :unauthorized
     end
 
-    # devise-jwt の Warden ディスパッチをスキップ（手動発行に任せる）
+    # devise-jwt の自動ディスパッチはスキップ（手動発行に任せる）
     request.env['warden-jwt_auth.skip'] = true
 
-    # current_user を使えるように Devise のサインインは行う（セッション張るだけ）
-    sign_in(:user, user)
+    # current_user を使えるようにするが、セッションは保存しない
+    sign_in(:user, user, store: false)
 
-    # 手動で JWT を発行 → レスポンスヘッダ
+    # JWT を手動発行 → レスポンスヘッダ
     token, _payload = Warden::JWTAuth::UserEncoder.new.call(user, :user, nil)
     response.set_header('Authorization', "Bearer #{token}")
-    # フロントから Authorization ヘッダを読み取れるように
     response.set_header('Access-Control-Expose-Headers', 'Authorization')
 
     render json: { user: user_payload(user) }, status: :ok
   end
 
   # DELETE /auth/sign_out
-  # JWT の revoke（Null 戦略なので実質 no-op）。常に 204 を返す
+  # JWT の revoke（Null 戦略なので実質 no-op）。常に 204
   def destroy
     sign_out(resource_name) if current_user
     head :no_content
@@ -97,8 +96,8 @@ class Users::SessionsController < Devise::SessionsController
     }
   end
 
-  # 🔎 create まわりの例外を 500 にせず捕捉し、401 で返す
-  #    DEBUG_AUTH_ERRORS=true のときだけヘッダで例外名/メッセージを露出
+  # create まわりの例外を 500 にせず捕捉し、401 で返す
+  # DEBUG_AUTH_ERRORS=true のときだけヘッダで例外名/メッセージを露出
   def wrap_exceptions_for_debug
     yield
   rescue => e
@@ -122,7 +121,7 @@ class Users::SessionsController < Devise::SessionsController
     head :no_content
   end
 
-  # HTML にリダイレクトしないように
+  # 念のためHTMLリダイレクトはさせない
   def auth_options
     { scope: resource_name, recall: "#{controller_path}#new" }
   end

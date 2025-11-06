@@ -1,5 +1,13 @@
 # config/initializers/rack_attack.rb
 
+# === TEMP: use MemoryStore in prod until Solid tables exist ===
+# 環境変数 RACK_ATTACK_USE_MEMORY_STORE=true のときだけ、
+# Rack::Attack のキャッシュをメモリストアに切り替えて DB（Solid Cache）を触らないようにする。
+# 既存のロジックはそのまま・条件付きでの上書きのみ。
+if ENV["RACK_ATTACK_USE_MEMORY_STORE"] == "true"
+  Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new
+end
+
 # 起動時に一度だけ設定されるようにクラスを開く
 class Rack::Attack
   # ===============================

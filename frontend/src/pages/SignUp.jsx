@@ -32,7 +32,7 @@ export default function SignUp() {
 
         // サインアップ後の遷移先（?redirect= があれば優先）
         const params = new URLSearchParams(location.search);
-        const redirect = params.get("redirect") || "/place-homepage";
+        const redirect = params.get("redirect") || "/";
         location.replace(redirect);
       } catch (e) {
         setErr(String(e.message || e));
@@ -127,7 +127,7 @@ export default function SignUp() {
       }
 
       setToken(auth.replace(/^Bearer\s+/i, ""));
-      location.replace("/place-homepage");
+      location.replace("/");
     } catch (e) {
       setErr(String(e.message || e));
     } finally {
@@ -216,7 +216,7 @@ export default function SignUp() {
           <div className="h-px flex-1 bg-gray-200" />
         </div>
         <a
-          href="/place-homepage"
+          href="/"
           className="w-full block text-center rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
         >
           Continue without account

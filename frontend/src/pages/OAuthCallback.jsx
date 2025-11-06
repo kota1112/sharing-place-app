@@ -8,7 +8,7 @@ export default function OAuthCallback() {
     const token = p.get("token");
     if (token) {
       setToken(token);
-      const redirect = p.get("redirect") || "/place-homepage";
+      const redirect = p.get("redirect") || "/";
       location.replace(redirect);
     } else {
       location.replace("/login?error=oauth");

@@ -41,7 +41,7 @@ export default function AppHeader() {
       // 他コンポーネントへ通知（ヘッダー/フッターの状態更新）
       window.dispatchEvent(new Event("auth:changed"));
       // ホームへ
-      location.assign("/place-homepage");
+      location.assign("/");
     }
   }, []);
 
@@ -54,7 +54,7 @@ export default function AppHeader() {
         <div className="min-h-14 flex flex-wrap items-center gap-x-3 gap-y-2 py-2">
           {/* Brand / App name */}
           <a
-            href="/place-homepage"
+            href="/"
             className="rounded px-1 text-base font-semibold tracking-tight text-white hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:text-lg"
           >
             Places
@@ -64,7 +64,7 @@ export default function AppHeader() {
           <ul className="flex items-center gap-3 overflow-x-auto whitespace-nowrap text-sm text-white/90 sm:gap-5 sm:text-base">
             <li>
               <a
-                href="/place-homepage"
+                href="/"
                 className="rounded px-1 py-0.5 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               >
                 Home

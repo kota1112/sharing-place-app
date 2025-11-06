@@ -116,7 +116,7 @@ export default function AccountConnections({ embedded = false }) {
         <>
           <div className="flex flex-wrap gap-2 mb-2">
             <Link
-              to="/place-homepage"
+              to="/"
               className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
             >
               Home

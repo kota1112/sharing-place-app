@@ -46,7 +46,7 @@ export default function PlaceDetail() {
             {err}
           </pre>
           <Link
-            to="/place-homepage"
+            to="/"
             className="mt-4 inline-block text-blue-600 hover:underline"
           >
             ← Back
@@ -89,7 +89,7 @@ export default function PlaceDetail() {
     <>
       <AppHeader />
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-16 space-y-8">
-        <Link to="/place-homepage" className="text-blue-600 hover:underline">
+        <Link to="/" className="text-blue-600 hover:underline">
           ← Back
         </Link>
 

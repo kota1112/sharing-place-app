@@ -41,7 +41,7 @@ export default function LogIn() {
       try {
         await googleLogin(resp.credential);
         const params = new URLSearchParams(location.search);
-        const redirect = params.get("redirect") || "/place-homepage";
+        const redirect = params.get("redirect") || "/";
         location.replace(redirect);
       } catch (e) {
         setErr(String(e.message || e));
@@ -117,7 +117,7 @@ export default function LogIn() {
 
       setToken(auth.replace(/^Bearer\s+/i, ""));
       const params = new URLSearchParams(location.search);
-      const redirect = params.get("redirect") || "/place-homepage";
+      const redirect = params.get("redirect") || "/";
       location.replace(redirect);
     } catch (e) {
       setErr(String(e.message || e));
@@ -298,7 +298,7 @@ export default function LogIn() {
           <div className="h-px flex-1 bg-gray-200" />
         </div>
         <a
-          href="/place-homepage"
+          href="/"
           className="w-full block text-center rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
         >
           Continue without account

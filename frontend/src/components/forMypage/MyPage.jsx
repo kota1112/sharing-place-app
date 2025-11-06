@@ -235,7 +235,7 @@ export default function MyPage() {
                 Log in
               </a>
               <a
-                href="/place-homepage"
+                href="/"
                 className="rounded-md border px-4 py-2 text-sm font-medium"
               >
                 ホームを見る

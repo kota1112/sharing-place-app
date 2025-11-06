@@ -16,12 +16,12 @@ export default function AppFooter() {
 
   const items = authed
     ? [
-        { href: "/place-homepage", label: "Home" },
+        { href: "/", label: "Home" },
         { href: "/place/new", label: "Post" },
         { href: "/mypage", label: "My Page" },
       ]
     : [
-        { href: "/place-homepage", label: "Home" },
+        { href: "/", label: "Home" },
         { href: "/mypage", label: "My Page" },
       ];
 

@@ -213,7 +213,7 @@ export default function AccountSettings() {
           My Page
         </Link>
         <Link
-          to="/place-homepage"
+          to="/"
           className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
         >
           Home

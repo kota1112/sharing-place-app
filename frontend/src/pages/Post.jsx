@@ -146,7 +146,7 @@ export default function Post() {
                 Log in
               </a>
               <a
-                href="/place-homepage"
+                href="/"
                 className="rounded-md border px-4 py-2 text-sm font-medium"
               >
                 ホームを見る
@@ -423,7 +423,7 @@ export default function Post() {
             <div className="sticky bottom-16 z-40 mt-8 border-t bg-white/80 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/60">
               <div className="flex items-center justify-end gap-3">
                 <a
-                  href="/place-homepage"
+                  href="/"
                   className="rounded-md border px-4 py-2 text-sm font-medium"
                 >
                   ← Back to Home

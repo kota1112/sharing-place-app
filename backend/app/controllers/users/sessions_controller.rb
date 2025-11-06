@@ -25,6 +25,9 @@ class Users::SessionsController < Devise::SessionsController
   # - devise-jwt の自動ディスパッチは使わず、手動でJWT発行
   # - APIモードで例外になりがちなセッション保存は行わない（store: false）
   def create
+    Rails.logger.info("[sign_in] ENTER create action. content_type=#{request.content_type} accept=#{request.headers['Accept']}")
+    Rails.logger.info("[sign_in] raw_body=#{request.raw_post.to_s.bytesize}B")
+    
     email, password = extract_credentials
     unless email.present? && password.present?
       return render json: { error: "Invalid credentials" }, status: :unauthorized

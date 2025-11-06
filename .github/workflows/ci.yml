@@ -13,7 +13,7 @@ jobs:
 
     services:
       postgres:
-        # PG17（structure.sql の transaction_timeout 互換／サーバとクライアントのバージョンを合わせる）
+        # サーバを PG17 に固定（構造ダンプでの transaction_timeout も扱える）
         image: postgres:17
         env:
           POSTGRES_USER: postgres
@@ -30,7 +30,7 @@ jobs:
     env:
       RAILS_ENV: test
 
-      # Rails が DB に接続するための環境変数（DATABASE_URL は使わず PG* を明示）
+      # Rails が DB に接続するための環境変数（DATABASE_URL ではなく PG* を明示）
       PGHOST: 127.0.0.1
       PGPORT: 5432
       PGUSER: postgres
@@ -59,12 +59,19 @@ jobs:
           ruby-version: "3.3.4"
           bundler-cache: true
 
-      # ✅ サーバ(PostgreSQL 17)と同じメジャーの PG クライアントを導入し PATH に通す
+      # ✅ PGDG リポジトリを追加して PG17 クライアントを導入（psql/pg_dump のバージョンをサーバと一致させる）
       - name: Install PG17 client & system deps
         run: |
+          sudo install -d -m 0755 /usr/share/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17 libvips
+
+          # PATH に PG17 の bin を追加（保険）
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
           pg_dump --version
           psql --version
 
@@ -80,7 +87,7 @@ jobs:
           psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test_queue;"
           psql -h "$PGHOST" -U "$PGUSER" -c "CREATE DATABASE sharing_place_app_test_cable;"
 
-      # ✅ schema:load は使わず、全ロールを migrate で構築（既存ロジック踏襲）
+      # schema:load は使わず、全ロールを migrate で構築（既存方針を踏襲）
       - name: Migrate all roles
         working-directory: backend
         run: |

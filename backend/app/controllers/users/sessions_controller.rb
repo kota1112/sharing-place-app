@@ -2,22 +2,41 @@
 class Users::SessionsController < Devise::SessionsController
   respond_to :json
 
+  # API用: サインイン/アウトではCSRFを無効化（本番でもraiseしない）
+  skip_before_action :verify_authenticity_token, only: [:create, :destroy], raise: false
+
   # /auth/me は JWT 必須
   before_action :authenticate_user!, only: [:me]
 
   # POST /auth/sign_in
   # 成功時は devise-jwt が Authorization: Bearer <token> を自動で付ける
   def create
-    # メール+パスワードで認証
-    self.resource = warden.authenticate!(auth_options)
-    # JWT を発行させるために sign_in を呼ぶ
-    sign_in(resource_name, resource)
+    # どちらの形でも受ける: {user: {email, password}} / {email, password}
+    email    = params.dig(:user, :email)    || params[:email]
+    password = params.dig(:user, :password) || params[:password]
 
-    render json: { user: user_payload(resource) }, status: :ok
+    unless email.present? && password.present?
+      return render json: { error: "Invalid credentials" }, status: :unauthorized
+    end
+
+    # Deviseの認証フローに合わせてDBから取得→パスワード検証
+    user = User.find_for_database_authentication(email: email)
+    unless user&.valid_password?(password)
+      return render json: { error: "Invalid credentials" }, status: :unauthorized
+    end
+
+    # devise-jwt を動かすため sign_in を必ず通す
+    sign_in(:user, user)
+
+    render json: { user: user_payload(user) }, status: :ok
+  rescue => e
+    # どんな例外でも 500 を外へ出さず、ログだけ残して 401 を返す
+    Rails.logger.error("[sign_in] #{e.class}: #{e.message}\n#{Array(e.backtrace).first(5).join("\n")}")
+    render json: { error: "Sign in failed" }, status: :unauthorized
   end
 
   # DELETE /auth/sign_out
-  # JWT の revoke。常に 204 を返すようにしておく
+  # JWT の revoke。常に 204 を返す
   def destroy
     sign_out(resource_name) if current_user
     head :no_content
@@ -25,9 +44,6 @@ class Users::SessionsController < Devise::SessionsController
 
   # GET /auth/me
   # 現在ログイン中ユーザーを返す
-  #
-  # ここで「このユーザーに今どの外部アカウントが紐づいているか」を返すことで
-  # /account/connections が状態を切り替えられる
   #
   # 例:
   # {
@@ -46,11 +62,10 @@ class Users::SessionsController < Devise::SessionsController
 
   private
 
-  # フロントに返す共通の形
+  # フロントに返す共通の形（既存実装を保持）
   def user_payload(user)
     return nil unless user
 
-    # social_identities が無い環境でも落ちないように safe navigation
     providers =
       if user.respond_to?(:social_identities)
         user.social_identities.pluck(:provider)

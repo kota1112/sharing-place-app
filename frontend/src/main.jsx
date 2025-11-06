@@ -63,7 +63,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/place-homepage" element={<PlacesHomepage />} />
+        <Route path="/" element={<PlacesHomepage />} />
         {/* ← ここ、元から "//places/:id" になってたのでそのままにしてあります */}
         <Route path="//places/:id" element={<PlaceDetail />} />
         <Route path="/place/new" element={<Post />} />

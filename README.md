@@ -32,6 +32,15 @@ https://sharing-place-app.vercel.app/
 
 ## 機能一覧
 ## 使用技術
+| Category          | Technology Stack                                     |
+| ----------------- | --------------------------------------------------   |
+| Frontend          | JavaScript, TailWind CSS                             |
+| Backend           | Ruby, Ruby on Rails                                  |
+| Infrastructure    | Amazon S3, Render, Vercel                            |
+| Database          | PostgreSQL                                           |
+| CI/CD             | GitHub Actions                                       |
+| etc.              | ESLint, Prettier, Git, GitHub                        |
+
 ## 課題
 ## 今後の展望
 本プロダクトは5つのフェーズに分けて、段階的に開発を進めています。

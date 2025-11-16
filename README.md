@@ -1,5 +1,5 @@
 # MePost
-![ヘッダー画像](https://github.com/kota1112/sharing-place-app/edit/main//docs/img/for_README/スクリーンショット 2025-11-17 3.32.52.png)
+![ヘッダー画像]docs/img/for_README/app_header.png)
 <br />
 
 ## アプリURL

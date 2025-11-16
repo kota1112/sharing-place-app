@@ -1,6 +1,7 @@
 # MePost
 
 ## アプリURL
+https://sharing-place-app.vercel.app/
 
 ## サービスの概要
 ## アプリを作ったキッカケ

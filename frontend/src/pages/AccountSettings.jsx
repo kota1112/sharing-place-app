@@ -263,12 +263,6 @@ export default function AccountSettings() {
             </div>
           </div>
 
-          {/* Google連携の状態をここで見せる。実操作は専用ページへ */}
-          <section className="space-y-2 border-t pt-4">
-            <h2 className="text-sm font-semibold">External accounts</h2>
-            <AccountConnections embedded />
-          </section>
-
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -285,6 +279,14 @@ export default function AccountSettings() {
               Change password
             </button>
           </div>
+
+          {/* Google連携の状態をここで見せる。実操作は専用ページへ */}
+          <section className="space-y-2 border-t pt-4">
+            <h2 className="text-sm font-semibold">External accounts</h2>
+            <AccountConnections embedded />
+          </section>
+
+          
         </div>
       )}
 

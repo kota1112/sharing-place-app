@@ -57,7 +57,7 @@ export default function AppHeader() {
             href="/"
             className="rounded px-1 text-base font-semibold tracking-tight text-white hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:text-lg"
           >
-            Places
+            MePost
           </a>
 
           {/* Global nav */}

@@ -170,7 +170,7 @@ export default function PlacesHomepage() {
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-16">
         {/* タイトル + 右上アクション */}
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold">Places_homepage</h1>
+          <h1 className="text-2xl font-bold">MePost Home</h1>
           {isAuthed ? (
             <Link
               to="/mypage"

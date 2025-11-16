@@ -30,22 +30,22 @@ https://sharing-place-app.vercel.app/
 ## アプリケーションのイメージ
 | サインアップ画面 |　ログイン画面 |
 | ---- | ---- |
-| ![Top画面](/docs/img/app-view/welcome_1.1.png) | ![ログイン画面](/docs/img/app-view/login_1.1.png) |
+| ![サインアップ画面](docs/img/for_README/sign_up.png) | ![ログイン画面](docs/img/for_README/Log_In.png) |
 | 登録せずに沢山の人が見れるようにしています。 |　メールアドレスとパスワードでの認証機能を実装、Googleアカウントでの認証を実装しました。 |
 
 | ホーム画面(List) |ホーム画面(Grid) |
 | ---- | ---- |
-| ![事業者選択画面](/docs/img/app-view/select-business_1.1.png) | ![請求書作成画面](/docs/img/app-view/create-invoice_1.1.png) |
+| ![ホーム画面(List)](docs/img/for_README/Home_List.png) | ![ホーム画面(Grid) ](docs/img/for_README/Home_Grid.png) |
 | 登録せずに沢山の人が見れるようにしています。| 請求書の作成機能・マスタデータの呼び出し機能・税率変更機能・税率別内訳の計算機能、合計金額の計算機能を実装しました。 |
 
 | ホーム画面(Map) |　POST画面 |
 | ---- | ---- |
-| ![請求書詳細画面](/docs/img/app-view/invoice-detail_1.1.png) | ![　PDF出力画面](/docs/img/app-view/print-invoice_1.1.png) |
+| ![ホーム画面(Map)](docs/img/for_README/Home_Map.png) | ![　POST画面](docs/img/for_README/Post.png) |
 | 請求書データの表示機能を実装しました。 | PDFでの請求書発行機能を実装しました。 |
 
 | My Page画面 |　アカウント設定画面 |
 | ---- | ---- |
-| ![請求書詳細画面](/docs/img/app-view/select-master_1.1.png) | ![　PDF出力画面](/docs/img/app-view/master-register-form_1.1.png) |
+| ![My Page画面](docs/img/for_README/Mypage.png) | ![　アカウント設定画面](docs/img/for_README/アカウント設定.png) |
 | 事業者情報と備考欄情報のマスタ登録機能を実装しました。 | マスタ情報の登録をすることで、請求書の作成時にデータを呼び出すことができます。 |
 
 ## 機能一覧

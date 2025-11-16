@@ -26,7 +26,7 @@ export default function AppFooter() {
       ];
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-blue-400/90 pb-[max(env(safe-area-inset-bottom),0px)] shadow-sm backdrop-blur">
+    <footer className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-blue-200/90 pb-[max(env(safe-area-inset-bottom),0px)] shadow-sm backdrop-blur">
       <nav aria-label="Bottom navigation" className="mx-auto max-w-7xl">
         <ul className={`grid ${items.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
           {items.map((it) => (

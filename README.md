@@ -34,7 +34,7 @@ https://sharing-place-app.vercel.app/
 ## 使用技術
 | Category          | Technology Stack                                     |
 | ----------------- | --------------------------------------------------   |
-| Frontend          | JavaScript, TailWind CSS                             |
+| Frontend          | JavaScript, React, TailWind CSS                      |
 | Backend           | Ruby, Ruby on Rails                                  |
 | Infrastructure    | Amazon S3, Render, Vercel                            |
 | Database          | PostgreSQL                                           |

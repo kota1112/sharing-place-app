@@ -6,7 +6,8 @@
 https://sharing-place-app.vercel.app/
 
 ## サービスの概要
-観光地やお店を共有するアプリ。行ったお店や行きたいお店を共有したり、自分だけのリストを作成できるアプリです。
+観光地やお店の「行ってよかった」「行きたい」を共有するアプリです。
+行った場所や気になるスポットを保存して、自分だけのリストや人に見せるリストを作成できます。
 
 ## アプリを作ったキッカケ
 オーストラリアに留学して3年、僕はメルボルンのさまざまな観光地やスポットを巡ってきました。
@@ -68,6 +69,8 @@ https://sharing-place-app.vercel.app/
 | Database          | PostgreSQL                                           |
 | CI/CD             | GitHub Actions                                       |
 | etc.              | ESLint, Prettier, Git, GitHub, RSpec                        |
+
+## こだわり/工夫した点
 
 
 ## 今後の展望

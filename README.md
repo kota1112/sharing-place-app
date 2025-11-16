@@ -1,5 +1,5 @@
 # MePost
-![ヘッダー画像]docs/img/for_README/app_header.png)
+![ヘッダー画像](docs/img/for_README/app_header.png)
 <br />
 
 ## アプリURL
